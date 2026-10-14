@@ -1,97 +1,116 @@
 # Metodología
 
-## Fuente, unidad y cobertura
+## 1. Pregunta
 
-La fuente es el INDEC, Censo Nacional de Población, Hogares y Viviendas 2022.
-La unidad estadística son los hogares en viviendas particulares: 15.932.302 hogares,
-distribuidos en 527 departamentos de 24 provincias. La cartografía proviene de INDEC/IGN.
+¿Cuánto cambia el acceso de los hogares a cuatro servicios básicos —agua de red, cloacas, gas de red e internet— según el departamento del país donde viven?
 
-Los códigos se conservan como texto: dos dígitos para provincias y cinco para departamentos.
-Las filas provinciales y departamentales del CSV se mantienen separadas para evitar duplicar hogares.
-La unión cartográfica utiliza el código departamental completo, que ya incluye la provincia.
+La visualización describe **brechas entre territorios**. No establece causas, distancias recorridas ni calidad de las redes.
 
-Los polígonos `94021` y `94028` no tienen datos censales. Se conservan en la cartografía,
-planos y con gris rayado y la etiqueta «Sin datos censales». No se interpretan como cero.
-Malvinas permanece visible y la Antártida se muestra también en un recuadro.
+## 2. Fuente, unidad y cobertura
 
-## Servicios y porcentajes
+- **Fuente:** INDEC, Censo Nacional de Población, Hogares y Viviendas 2022. Cuadros de hogares publicados por jurisdicción y departamento, con verificaciones puntuales en REDATAM.
+- **Unidad estadística:** hogares en viviendas particulares. Total: **15.932.302 hogares**.
+- **Cobertura:** 527 departamentos, partidos y comunas de 24 jurisdicciones.
+- **Cartografía:** INDEC (GeoNode), con base geométrica del IGN. La capa de departamentos tiene 529 polígonos.
 
-Se consideran cuatro variables:
+Las cuatro variables provienen del mismo operativo, el mismo año, la misma unidad y el mismo nivel geográfico. No se combinan fuentes con definiciones distintas.
 
-- Agua de red (H14): hogares con agua por red pública.
-- Cloacas (H18): hogares con desagüe a red pública.
-- Gas de red (H19): hogares que cocinan principalmente con gas de red. No indica si la red existe en la zona.
-- Internet (H24A): hogares con conexión en la vivienda, excluyendo la conexión celular. No mide velocidad ni calidad.
+## 3. Variables
 
-Para cada servicio, el porcentaje con acceso es `100 × hogares con servicio / hogares totales`.
-El porcentaje sin acceso es su complemento, `100 − porcentaje con acceso`.
-Las tarjetas muestran el porcentaje con acceso junto con la cantidad de hogares y las medias nacional y provincial.
+| Servicio    | Variable | Definición utilizada                                                                                                            | Qué no mide                                                                            |
+| ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Agua de red | H14      | Hogares cuya fuente de agua **para beber y cocinar** es la red pública. La provisión puede estar dentro o fuera de la vivienda. | Continuidad, presión ni calidad del agua.                                              |
+| Cloacas     | H18      | Hogares con desagüe del inodoro a red pública. El denominador incluye **todos** los hogares, también los que no tienen baño.    | Estado de la red ni tratamiento de efluentes.                                          |
+| Gas de red  | H19      | Hogares que usan **principalmente gas de red para cocinar**.                                                                    | Si la red pasa por la zona; un hogar con red puede cocinar con electricidad o garrafa. |
+| Internet    | H24A     | Hogares con conexión a internet **en la vivienda**. Excluye el acceso solo por teléfono celular (H24B).                         | Velocidad, estabilidad, tecnología ni costo.                                           |
 
-Los porcentajes provinciales se obtienen de los numeradores y denominadores de
-`data/processed/resumen_nacional.json`: `100 × hogares provinciales con servicio / hogares provinciales totales`.
-Se utilizan estos totales completos, sin promediar los porcentajes departamentales ni los valores provinciales redondeados.
+## 4. Cálculos
 
-## Índice de servicios bajo la media
+**Porcentaje con acceso:** `100 × hogares con el servicio / hogares totales` del territorio.
 
-`servicios_bajo_media` cuenta en cuántos de los cuatro servicios el departamento tiene
-un porcentaje con acceso menor que la media nacional: 0, 1, 2, 3 o 4.
-La igualdad con la media no se cuenta como un servicio bajo la media.
-Las medias nacionales del archivo procesado son agua 85,03%, cloacas 61,25%,
-gas 52,66% e internet 76,49%.
+**Porcentaje sin acceso:** `100 − porcentaje con acceso`. Es la variable que representan la altura y el color del mapa.
 
-El índice clasifica territorios. No cuenta hogares sin los cuatro servicios y no constituye
-una medida de privaciones simultáneas en un mismo hogar.
+**Agregados provinciales y nacionales:** se calculan sumando numeradores y denominadores de los departamentos. **Nunca se promedian porcentajes**, porque eso daría el mismo peso a un departamento de 500 hogares que a uno de 500.000.
 
-## Altura y color del mapa
+**Medias nacionales:**
 
-En la vista nacional se dibujan los departamentos con dos niveles de agregación explícitos:
+| Agua de red | Cloacas | Gas de red | Internet |
+| ----------- | ------- | ---------- | -------- |
+| 85,03%      | 61,25%  | 52,66%     | 76,49%   |
 
-- **Altura:** el porcentaje provincial de hogares sin el servicio. Todos los departamentos de una provincia comparten la misma altura.
-- **Color:** el porcentaje de hogares sin el servicio de cada departamento, con una rampa continua inferno y dominio fijo de 0 a 100.
+Las tarjetas muestran siempre el porcentaje junto con la **cantidad de hogares**, y lo comparan con las medias nacional y provincial.
 
-En la vista Resumen, el color conserva las cinco categorías del índice departamental.
-La altura provincial se calcula como la media ponderada de los índices departamentales:
+## 5. Índice de servicios bajo la media (vista Resumen)
 
-`índice provincial ponderado = suma(índice departamental × hogares del departamento) / suma(hogares de los departamentos)`.
+`servicios_bajo_media` cuenta en cuántos de los cuatro servicios el departamento tiene un porcentaje con acceso **menor** que la media nacional. Toma valores de 0 a 4. La igualdad con la media no se cuenta como "bajo la media".
 
-Solo participan departamentos con datos y hogares válidos. El resultado está entre 0 y 4 y puede
-ser decimal. No se redondea a una categoría para determinar la altura y no equivale a contar
-cuántos porcentajes provinciales están bajo la media nacional. La ponderación representa
-la distribución de hogares entre territorios clasificados; no mide servicios faltantes en cada hogar.
+**Qué es y qué no es:**
 
-Al entrar en una provincia, sus departamentos interpolan durante 600 ms desde la altura
-provincial a la departamental: el porcentaje departamental sin servicio o el índice 0–4, según la vista.
-Las otras provincias conservan sus alturas provinciales, pasan a opacidad 0,2 y no son interactivas.
-Al volver al país se recuperan las alturas provinciales. Se respeta la preferencia de movimiento reducido.
+- Es una **clasificación de territorios**.
+- **No** cuenta hogares que carecen de los cuatro servicios a la vez. Para eso habría que cruzar las variables hogar por hogar, y los datos agregados no lo permiten.
+- **No** es un índice de pobreza ni de necesidades básicas insatisfechas.
 
-La escala vertical es lineal, sin raíces ni logaritmos. El máximo base es 63.000 unidades visuales,
-el 35% de la escala anterior: `altura = porcentaje / 100 × 63.000` para servicios y
-`altura = índice / 4 × 63.000` para Resumen. Estas unidades no representan elevación del terreno
-ni distancias reales. El realce de selección conserva el aumento visual temporal del 15%,
-sin cambiar los valores estadísticos de las tarjetas. En vista plana, todas las alturas se multiplican por cero.
+Resultado: 150 departamentos están bajo la media en los cuatro servicios y concentran 1.599.191 hogares.
 
-Los bordes se leen mediante las paredes y la iluminación de las extrusiones; no se dibujan capas de línea.
-Se conserva la geometría de los archivos procesados, sin separación artificial entre provincias.
+## 6. Control de calidad de los datos
 
-## Preparación y límites de interpretación
+Durante la preparación se detectaron y resolvieron las siguientes incidencias:
 
-La ventana de comparación muestra el porcentaje de hogares con servicio y la cantidad de hogares
-de cada departamento. La diferencia es A menos B en puntos porcentuales, no una variación porcentual
-relativa. La marca vertical del gráfico corresponde a la media nacional del servicio.
-La frase resumen elige el servicio con mayor diferencia absoluta y mantiene el orden A, B;
-si hay empate, utiliza el primero en el orden agua, cloacas, gas e internet. Es una descripción, sin atribuir causas.
+| Incidencia                                                                                                                                                                                  | Tratamiento                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| REDATAM calcula el porcentaje de cloacas sobre los **casos aplicables**, excluyendo hogares sin baño. Ejemplo: radio `020070101`, 98 hogares con cloaca sobre 105 aplicables y 106 totales. | Se recalculó sobre el **total de hogares** (98/106).                                                                           |
+| Una hoja del cuadro de internet de Buenos Aires (`Cuadro7.2.130`) se titula "Tres de Febrero", pero su total de 3.539 hogares corresponde a **Tres Lomas** (código 06847).                  | Se asignó por código y por total de hogares, verificado en REDATAM, y no por el título.                                        |
+| Los cuadros usan `-` (cero absoluto) y `///` (dato que no corresponde presentar).                                                                                                           | Se trataron por separado: `///` no se convirtió en cero.                                                                       |
+| Gas en Mártires (26063) y Guachipas (66063) figura como `///`.                                                                                                                              | Se recuperó el dato desde REDATAM (un hogar con gas de red en cada uno). La fuente queda identificada en el archivo procesado. |
+| Variantes de nombres entre hojas (acentos, abreviaturas, "Lezama", "Nueve de Julio", CABA sin coma).                                                                                        | Todas las uniones se hicieron por **código INDEC de 5 dígitos**, nunca por nombre.                                             |
 
-Las tres comparaciones sugeridas buscan los extremos de internet, cloacas e índice de servicios
-bajo la media, entre departamentos con al menos 1.000 hogares. En los empates se elige primero
-el departamento con más hogares y luego el menor código. La selección manual permite comparar
-departamentos de cualquier tamaño con datos; por debajo de 1.000 hogares se muestra una advertencia
-sobre la sensibilidad de los porcentajes a pequeñas diferencias absolutas.
+**Controles finales:**
 
-`scripts/prepare.py` genera los datos procesados y simplifica las geometrías con tolerancia
-de 0,005 grados, preservando su topología individual, y coordenadas de cuatro decimales.
-La simplificación puede producir pequeñas diferencias visuales entre límites compartidos.
-Los originales se conservan sin cambios en `data/raw/`; los derivados están en `data/processed/`.
+- 527 departamentos y 24 jurisdicciones, sin valores faltantes en las cuatro variables.
+- La suma de hogares de los departamentos coincide exactamente con el total de cada provincia.
+- Los cuatro porcentajes se recalcularon desde numerador y denominador, y coinciden en todas las filas.
+- Los 527 códigos departamentales tienen polígono en la cartografía.
 
-La visualización muestra brechas entre territorios. No establece causas, distancias recorridas
-ni calidad de las redes. Los porcentajes departamentales del GeoJSON están redondeados a un decimal;
-las alturas provinciales de servicios se calculan a partir de los totales de hogares para evitar ese redondeo.
+## 7. Territorios sin datos
+
+Los polígonos `94021` y `94028` (Antártida Argentina e Islas del Atlántico Sur) no tienen registros de hogares en viviendas particulares en el censo. Se dibujan siempre, sin altura, en gris rayado y con la etiqueta "Sin datos censales". **No se interpretan como 0%.** Las Islas Malvinas permanecen visibles en el mapa, y la Antártida se muestra en un recuadro.
+
+## 8. Cómo se representa en el mapa
+
+- **Vista nacional:** la **altura** es el porcentaje de hogares sin el servicio **en la provincia**, así que todos los departamentos de una provincia comparten la altura. El **color** es el valor **de cada departamento**. Son la misma variable a dos escalas de agregación, y la leyenda lo indica.
+- **Dentro de una provincia:** altura y color corresponden al departamento.
+- **Color:** rampa continua "inferno", perceptualmente uniforme y apta para daltonismo, con dominio fijo de 0 a 100% para los cuatro servicios. Así el mismo color significa lo mismo en todas las vistas.
+- **Altura:** escala lineal, sin raíces ni logaritmos. Es una exageración visual que no representa elevación ni distancias reales.
+- **Vista Resumen:** el color muestra las cinco categorías (0 a 4) del índice departamental. La altura provincial es la media del índice ponderada por hogares: `suma(índice × hogares) / suma(hogares)`. Puede tener decimales.
+- **Vista plana:** elimina la altura y la perspectiva, para leer los valores sin la distorsión del 3D (ocultamiento y exageración de volúmenes).
+
+## 9. Comparación entre departamentos
+
+- Muestra el porcentaje con acceso y la cantidad de hogares de cada departamento, con una marca en la media nacional.
+- La diferencia se expresa en **puntos porcentuales** (A − B), no como variación relativa.
+- La frase resumen describe el servicio con mayor diferencia absoluta, sin atribuir causas.
+- Las comparaciones sugeridas buscan extremos entre departamentos con **al menos 1.000 hogares**. Si se elige un departamento más chico, se muestra una advertencia, porque pocos hogares de diferencia producen grandes variaciones porcentuales.
+
+## 10. Limitaciones
+
+- **Fecha:** los datos son de mayo de 2022 y no reflejan obras posteriores.
+- **Nivel agregado:** los porcentajes describen territorios, no personas. Un valor departamental no permite inferir la situación de cada hogar ni de cada localidad dentro del departamento.
+- **Heterogeneidad interna:** un departamento puede combinar una ciudad bien conectada con áreas rurales sin redes; el promedio oculta esa diferencia.
+- **Departamentos chicos:** con pocos hogares, los porcentajes son más sensibles.
+- **Conceptos:** el gas mide uso para cocinar y no disponibilidad de red; el agua y el internet miden acceso, no calidad.
+- **Geometría:** los polígonos se simplificaron para que el mapa cargue rápido (tolerancia de 0,005°, coordenadas con 4 decimales). Puede haber pequeñas diferencias visuales en límites compartidos. Los límites son estadísticos, no deslindes legales.
+- **Redondeo:** los porcentajes departamentales se muestran con un decimal; los agregados provinciales se calculan con totales de hogares, sin ese redondeo.
+
+## 11. Reproducibilidad
+
+- Los datos originales están sin modificar en `data/raw/`.
+- `scripts/prepare.py` une datos y cartografía por código, calcula medias e índice, y genera los archivos de `data/processed/`.
+- Para reproducir: `pip install pandas geopandas` y luego `python scripts/prepare.py`.
+
+## 12. Fuentes y licencias
+
+- INDEC, Censo 2022, cuadros de hogares: [cuadro 2 (agua)](https://www.indec.gob.ar/ftp/cuadros/poblacion/c2022_tp_hogares_c2.xlsx), [cuadro 3 (cloacas)](https://www.indec.gob.ar/ftp/cuadros/poblacion/c2022_tp_hogares_c3.xlsx), [cuadro 4 (gas)](https://www.indec.gob.ar/ftp/cuadros/poblacion/c2022_tp_hogares_c4.xlsx) y [cuadro 7 (internet)](https://www.indec.gob.ar/ftp/cuadros/poblacion/c2022_tp_hogares_c7.xlsx), en sus versiones nacional y por jurisdicción.
+- [REDATAM, Censo 2022](https://redatam.indec.gob.ar/binarg/RpWebEngine.exe/Portal?BASE=CPV2022&lang=ESP).
+- [Definiciones de la base de datos](https://redatam.indec.gob.ar/redarg/CENSOS/CPV2022/Docs/Redatam_Definiciones_de_la_base_de_datos.pdf).
+- Cartografía: [INDEC GeoNode, capa Departamentos](https://geonode.indec.gob.ar/layers/geonode:departamentos/metadata_detail).
+- Licencia de los datos del INDEC: [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.es).
