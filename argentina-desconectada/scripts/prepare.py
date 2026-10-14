@@ -93,8 +93,9 @@ print(f"OK → {salida} ({salida.stat().st_size / 1e6:.2f} MB)")
 # ---------------------------------------------------------------- límites provinciales
 # Se disuelven los departamentos originales (sin simplificar) por provincia: los dos primeros
 # dígitos de cde son el código de provincia. Así el trazo no tiene huecos entre departamentos.
+# Se excluyen los polígonos sin datos (islas del Atlántico Sur y Antártida): no son parte del trazo provincial.
 geo["cpr"] = geo["cde"].str[:2]
-limites = geo.dissolve(by="cpr", as_index=False)
+limites = geo[~geo["cde"].isin(sin_datos)].dissolve(by="cpr", as_index=False)
 limites["nombre"] = limites["cpr"].map(prov_nombre)
 limites["geometry"] = limites.geometry.simplify(TOLERANCIA_SIMPLIFICACION, preserve_topology=True)
 sal_prov = OUT / "provincias.geojson"

@@ -7,7 +7,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;0,6..72,800;1,6..72,400&display=swap">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <link rel="stylesheet" href="css/style.css">
   </head>
   <body>
@@ -37,13 +36,14 @@
 
       <div class="mapas">
         <section id="map" aria-label="Mapa de acceso a servicios por departamento"></section>
+        <div id="leyenda-mapa" class="leyenda"></div>
         <figure class="amba">
           <figcaption>AMBA: CABA y 24 partidos del Gran Buenos Aires</figcaption>
           <div id="map-amba" role="region" aria-label="Mapa ampliado del AMBA"></div>
         </figure>
       </div>
     </div>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/d3@7.9.0/dist/d3.min.js"></script>
     <script type="module" src="js/main.js"></script>
   </body>
 </html>

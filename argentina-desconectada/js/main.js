@@ -1,5 +1,5 @@
 // Punto de entrada: carga de datos y armado del mapa.
-import { initMap, SERVICIOS, esAMBA, ENCUADRE_PAIS } from './map.js';
+import { initMap, SERVICIOS, esAMBA } from './map.js';
 import { initPanel } from './panel.js';
 
 const NOTAS = {
@@ -41,8 +41,11 @@ async function main() {
     if (!fijo) panel.mostrar(p);
   };
   const onSeleccion = seleccionar;
-  const mapaPais = initMap(document.querySelector('#map'), geojson, { encuadre: L.latLngBounds(ENCUADRE_PAIS), provincias, onHover, onSeleccion });
-  const mapaAmba = initMap(document.querySelector('#map-amba'), geojson, { filtro: esAMBA, conLeyenda: false, zoomSnap: 0.1, provincias, onHover, onSeleccion });
+  // En pantallas anchas el recuadro del AMBA va encima del mapa, a la izquierda: se le reserva ese lugar.
+  const recuadroAmba = document.querySelector('.amba');
+  const reservaAmba = () => (getComputedStyle(recuadroAmba).position === 'absolute' ? recuadroAmba.offsetWidth + 16 : 0);
+  const mapaPais = initMap(document.querySelector('#map'), geojson, { provincias, reserva: reservaAmba, contenedorLeyenda: document.querySelector('#leyenda-mapa'), onHover, onSeleccion });
+  const mapaAmba = initMap(document.querySelector('#map-amba'), geojson, { filtro: esAMBA, conLeyenda: false, conZoom: false, meridiano: 58.5, relleno: 6, provincias, onHover, onSeleccion });
   const mapa = {
     setServicio(s) {
       mapaPais.setServicio(s);

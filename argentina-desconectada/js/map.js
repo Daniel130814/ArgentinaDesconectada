@@ -1,4 +1,5 @@
-// Capa coroplética por departamento: colores, cortes y leyenda.
+// Mapa coroplético en SVG con D3: proyección, capas, zoom, leyenda y resaltado.
+// Requiere d3 v7 como global (se carga por CDN en index.html).
 const RAMPAS = {
   agua_red: ['#eff3ff', '#bdd7e7', '#6baed6', '#3182bd', '#08519c'],
   cloacas_red: ['#f2f0f7', '#cbc9e2', '#9e9ac8', '#756bb1', '#54278f'],
@@ -15,9 +16,13 @@ export const SERVICIOS = {
   internet_vivienda: { nombre: 'Internet', campo: 'pct_internet_vivienda', hogares: 'hogares_internet_vivienda' },
 };
 
-
 // Cortes fijos para todos los servicios: 0–20, 20–40, 40–60, 60–80 y 80–100 %.
 const CORTES = [20, 40, 60, 80];
+
+// Sector antártico (sin datos): queda fuera del encuadre y no se dibuja.
+// Las islas del Atlántico Sur (94021, con Malvinas) sí se dibujan, en gris.
+const ANTARTIDA = '94028';
+const ZOOM_MAX = 40;
 
 function clase(valor, cortes) {
   let i = 0;
@@ -25,36 +30,129 @@ function clase(valor, cortes) {
   return i;
 }
 
+// d3 espera anillos exteriores en sentido horario; si el GeoJSON viene al revés, el polígono
+// "cubre" el resto de la esfera. Se invierte solo cuando hace falta (idempotente).
+function orientar(geometria) {
+  const poligonos = geometria.type === 'Polygon' ? [geometria.coordinates] : geometria.coordinates;
+  for (const anillos of poligonos) {
+    if (d3.geoArea({ type: 'Polygon', coordinates: anillos }) > 2 * Math.PI) anillos.forEach((a) => a.reverse());
+  }
+}
+
 export function initMap(container, geojson, opciones = {}) {
-  const { filtro = null, encuadre = null, conLeyenda = true, provincias = null, zoomSnap = 1, onHover = () => {}, onSeleccion = () => {} } = opciones;
+  const { filtro = null, conLeyenda = true, conZoom = true, meridiano = 66, relleno = 8, reserva = () => 0, contenedorLeyenda = null, provincias = null, onHover = () => {}, onSeleccion = () => {} } = opciones;
   if (!container) throw new Error('No se encontró el contenedor del mapa.');
-  const map = L.map(container, { zoomSnap, zoomDelta: zoomSnap < 1 ? 0.5 : 1 });
-  map.attributionControl.addAttribution('Datos: INDEC, Censo 2022');
+
+  const feats = geojson.features.filter((f) => f.properties.codigo !== ANTARTIDA && (!filtro || filtro(f)));
+  feats.forEach((f) => orientar(f.geometry));
+  // El encuadre es el territorio con datos: deja afuera las islas lejanas y la Antártida.
+  const encuadre = { type: 'FeatureCollection', features: feats.filter((f) => !f.properties.sin_datos) };
+  const limites = provincias
+    ? provincias.features.filter((f) => feats.some((d) => d.properties.codigo.startsWith(f.properties.cpr)))
+    : [];
+  limites.forEach((f) => orientar(f.geometry));
 
   let servicio = 'agua_red';
-  const cortes = CORTES;
-  let capa;
-  const leyenda = L.control({ position: 'bottomright' });
-  leyenda.onAdd = () => L.DomUtil.create('div', 'leyenda');
-  if (conLeyenda) leyenda.addTo(map);
+  let seleccionado = null;
+  let ancho = 0;
+  let alto = 0;
+  const sinMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  const feats = geojson.features;
+  // Transverse Mercator (conforme) centrada en el meridiano del territorio.
+  const proyeccion = d3.geoTransverseMercator().rotate([meridiano, 0]);
+  const ruta = d3.geoPath(proyeccion);
 
-  function valorDe(p) {
+  const raiz = d3.select(container).classed('mapa-svg', true);
+  const svg = raiz.append('svg').attr('class', 'mapa');
+  const mapa = svg.append('g');
+
+  const valorDe = (p) => {
     if (p.sin_datos) return null;
     return servicio === 'resumen' ? p.servicios_bajo_media : p[SERVICIOS[servicio].campo];
-  }
-
-  function colorDe(p) {
+  };
+  const colorDe = (p) => {
     const v = valorDe(p);
     if (v == null) return GRIS;
     const rampa = RAMPAS[servicio];
-    return servicio === 'resumen' ? rampa[v] : rampa[clase(v, cortes)];
+    return servicio === 'resumen' ? rampa[v] : rampa[clase(v, CORTES)];
+  };
+
+  // Capas, de abajo hacia arriba: departamentos, límites provinciales, resaltado.
+  const deptos = mapa
+    .append('g')
+    .selectAll('path')
+    .data(feats, (d) => d.properties.codigo)
+    .join('path')
+    .attr('class', 'depto')
+    .attr('fill', (d) => colorDe(d.properties));
+  const provs = mapa.append('g').attr('class', 'provincias').selectAll('path').data(limites).join('path').attr('class', 'provincia');
+  const resalte = mapa.append('g').attr('class', 'resalte');
+  const marcaHover = resalte.append('path').attr('class', 'marca-hover');
+  const marcaHalo = resalte.append('path').attr('class', 'marca-halo');
+  const marcaSel = resalte.append('path').attr('class', 'marca-seleccion');
+
+  // Hover solo con mouse; en pantallas táctiles, un toque selecciona (el clic lo emite el toque).
+  let hover = null;
+  deptos
+    .on('pointerenter', (e, d) => {
+      if (e.pointerType !== 'mouse') return;
+      hover = d;
+      marcaHover.attr('d', ruta(d));
+      onHover(d.properties);
+    })
+    .on('pointerleave', (e) => {
+      if (e.pointerType !== 'mouse') return;
+      hover = null;
+      marcaHover.attr('d', null);
+    })
+    .on('click', (e, d) => onSeleccion(d.properties));
+
+  // Zoom y paneo
+  const zoom = d3.zoom().scaleExtent([1, ZOOM_MAX]);
+  let inicio = null;
+  if (conZoom) {
+    inicio = raiz.append('button').attr('type', 'button').attr('class', 'mapa-inicio').attr('disabled', true).text('Volver al inicio');
+    zoom.on('zoom', (e) => {
+      mapa.attr('transform', e.transform);
+      inicio.property('disabled', e.transform.k === 1 && e.transform.x === 0 && e.transform.y === 0);
+    });
+    svg.call(zoom);
+    inicio.on('click', () => svg.transition().duration(sinMovimiento ? 0 : 600).call(zoom.transform, d3.zoomIdentity));
   }
+
+  function trazar() {
+    deptos.attr('d', ruta);
+    provs.attr('d', ruta);
+    marcaHover.attr('d', hover ? ruta(hover) : null);
+    const d = seleccionado ? ruta(seleccionado) : null;
+    marcaHalo.attr('d', d);
+    marcaSel.attr('d', d);
+  }
+
+  // Se redibuja al cambiar el tamaño del contenedor (ventana, giro del celular, layout).
+  function medir() {
+    const { width, height } = container.getBoundingClientRect();
+    if (!width || !height || (width === ancho && height === alto)) return;
+    ancho = width;
+    alto = height;
+    svg.attr('width', ancho).attr('height', alto);
+    // reserva() es el ancho tapado por el recuadro del AMBA (a la izquierda): el país se acomoda en el resto.
+    proyeccion.fitExtent([[relleno + reserva(), relleno], [ancho - relleno, alto - relleno]], encuadre);
+    trazar();
+    if (conZoom) {
+      zoom.extent([[0, 0], [ancho, alto]]).translateExtent([[0, 0], [ancho, alto]]);
+      svg.call(zoom.translateBy, 0, 0); // vuelve a encajar el paneo actual en los nuevos límites
+    }
+  }
+  let pendiente = 0;
+  new ResizeObserver(() => {
+    cancelAnimationFrame(pendiente);
+    pendiente = requestAnimationFrame(medir);
+  }).observe(container);
+  medir();
 
   function dibujarLeyenda() {
     if (!conLeyenda) return;
-    const div = leyenda.getContainer();
     const rampa = RAMPAS[servicio];
     let html;
     if (servicio === 'resumen') {
@@ -62,101 +160,51 @@ export function initMap(container, geojson, opciones = {}) {
       html += rampa.map((c, i) => `<div><i style="background:${c}"></i>${i}</div>`).join('');
     } else {
       html = `<b>Hogares con ${SERVICIOS[servicio].nombre.toLowerCase()} (%)</b>`;
-      const lims = [0, ...cortes, 100];
-      html += rampa
-        .map((c, i) => `<div><i style="background:${c}"></i>${lims[i].toFixed(0)}% – ${lims[i + 1].toFixed(0)}%</div>`)
-        .join('');
+      const lims = [0, ...CORTES, 100];
+      html += rampa.map((c, i) => `<div><i style="background:${c}"></i>${lims[i].toFixed(0)}% – ${lims[i + 1].toFixed(0)}%</div>`).join('');
     }
     html += `<div><i style="background:${GRIS}"></i>Sin datos</div>`;
-    div.innerHTML = html;
+    leyenda.html(html);
   }
+  const leyenda = conLeyenda ? (contenedorLeyenda ? d3.select(contenedorLeyenda) : raiz.append('div').attr('class', 'leyenda')) : null;
+  dibujarLeyenda();
 
-  // Capas por encima de los departamentos (y de su resaltado al pasar el mouse), sin captar el mouse.
-  map.createPane('limites').style.zIndex = 450;
-  map.createPane('seleccion').style.zIndex = 460;
-  map.getPane('limites').style.pointerEvents = 'none';
-  map.getPane('seleccion').style.pointerEvents = 'none';
-  if (provincias) {
-    L.geoJSON(provincias, {
-      pane: 'limites',
-      interactive: false,
-      style: { fill: false, color: '#000000', weight: 1.4, opacity: 1 },
-    }).addTo(map);
+  // Acerca la vista a un conjunto de polígonos, con transición.
+  function encuadrar(fs, { maxZoom = 8, margen = 0.85 } = {}) {
+    if (!conZoom || !fs.length || !ancho) return;
+    const [[x0, y0], [x1, y1]] = ruta.bounds({ type: 'FeatureCollection', features: fs });
+    const izq = reserva();
+    const util = ancho - izq;
+    const k = Math.max(1, Math.min(maxZoom, margen / Math.max((x1 - x0) / util, (y1 - y0) / alto)));
+    const t = d3.zoomIdentity.translate(izq + util / 2, alto / 2).scale(k).translate(-(x0 + x1) / 2, -(y0 + y1) / 2);
+    svg.transition().duration(sinMovimiento ? 0 : 700).call(zoom.transform, t);
   }
-  let contorno = null; // línea roja del departamento seleccionado
-  function estilo(f) {
-    return { fillColor: colorDe(f.properties), fillOpacity: 0.9, color: '#ffffff', weight: 0.4 };
-  }
-
-  function capaDe(codigo) {
-    let hallada = null;
-    capa.eachLayer((l) => {
-      if (l.feature.properties.codigo === codigo) hallada = l;
-    });
-    return hallada;
-  }
-
-  function dibujar() {
-    if (capa) capa.remove();
-    capa = L.geoJSON(filtro ? { ...geojson, features: feats.filter(filtro) } : geojson, {
-      style: estilo,
-      onEachFeature: (f, layer) => {
-        layer.on('mouseover', () => {
-          layer.setStyle({ weight: 1.5, color: '#172635' });
-          layer.bringToFront();
-          onHover(f.properties);
-        });
-        layer.on('click', () => onSeleccion(f.properties));
-        layer.on('mouseout', () => capa.resetStyle(layer));
-      },
-    }).addTo(map);
-    dibujarLeyenda();
-  }
-
-  dibujar();
-  if (encuadre) {
-    // Encuadre fijo en el territorio continental: getBounds() incluiría el sector antártico.
-    map.fitBounds(encuadre);
-    map.setMinZoom(map.getZoom() - 1);
-    map.setMaxBounds(encuadre.pad(0.6));
-  } else {
-    map.fitBounds(capa.getBounds(), { padding: [4, 4] });
-  }
+  const porCodigo = (codigo) => feats.find((f) => f.properties.codigo === codigo);
 
   return {
-    map,
     setServicio(s) {
       servicio = s;
-      dibujar();
+      deptos.interrupt().transition().duration(sinMovimiento ? 0 : 450).attr('fill', (d) => colorDe(d.properties));
+      dibujarLeyenda();
     },
-    // Resalta un departamento (sin mover el mapa); null quita la marca.
+    // Resalta un departamento con borde oscuro (sin mover el mapa); null quita la marca.
     marcar(codigo) {
-      if (contorno) contorno.remove();
-      contorno = null;
-      const l = codigo && capaDe(codigo);
-      if (!l) return;
-      contorno = L.geoJSON(l.feature, {
-        pane: 'seleccion',
-        interactive: false,
-        style: { fill: false, color: '#e00000', weight: 3, opacity: 1 },
-      }).addTo(map);
+      seleccionado = (codigo && porCodigo(codigo)) || null;
+      const d = seleccionado ? ruta(seleccionado) : null;
+      marcaHalo.attr('d', d);
+      marcaSel.attr('d', d);
     },
     enfocar(codigo) {
       this.marcar(codigo);
-      const l = capaDe(codigo);
-      if (l) map.fitBounds(l.getBounds(), { maxZoom: 9, padding: [30, 30] });
+      if (seleccionado) encuadrar([seleccionado], { maxZoom: ZOOM_MAX, margen: 0.35 });
     },
-    // Los polígonos sin provincia (islas del Atlántico Sur, Antártida) quedan afuera del encuadre.
+    // Las islas del Atlántico Sur y la Antártida no tienen provincia: quedan afuera de la selección.
     enfocarProvincia(nombre) {
       if (!nombre) {
-        map.fitBounds(encuadre || capa.getBounds());
+        if (conZoom) svg.transition().duration(sinMovimiento ? 0 : 600).call(zoom.transform, d3.zoomIdentity);
         return;
       }
-      const b = L.latLngBounds([]);
-      capa.eachLayer((l) => {
-        if (l.feature.properties.provincia === nombre) b.extend(l.getBounds());
-      });
-      if (b.isValid()) map.fitBounds(b, { padding: [20, 20] });
+      encuadrar(feats.filter((f) => f.properties.provincia === nombre), { margen: 0.85 });
     },
   };
 }
@@ -167,4 +215,3 @@ const PARTIDOS_GBA = new Set([
   '06490', '06515', '06539', '06560', '06568', '06658', '06749', '06756', '06760', '06805', '06840', '06861',
 ]);
 export const esAMBA = (f) => f.properties.codigo.startsWith('02') || PARTIDOS_GBA.has(f.properties.codigo);
-export const ENCUADRE_PAIS = [[-55.3, -74], [-21.6, -53]];
