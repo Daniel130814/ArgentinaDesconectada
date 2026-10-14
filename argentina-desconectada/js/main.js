@@ -18,7 +18,7 @@ async function main() {
   const geojson = await res.json();
   const resumen = await fetch('data/processed/resumen_nacional.json').then((r) => (r.ok ? r.json() : null));
   const provincias = await fetch('data/processed/provincias.geojson').then((r) => (r.ok ? r.json() : null));
-  const pais = await fetch('data/processed/pais.geojson').then((r) => (r.ok ? r.json() : null));
+  if (!resumen || !provincias) throw new Error('No se pudo cargar el resumen o la cartografía provincial.');
   const datosProv = resumen ? resumen.provincias : {};
   const media = resumen ? resumen.media_nacional : null;
 
@@ -71,8 +71,8 @@ async function main() {
     recuadroAmba.hidden = cpr !== '06'; // la lupa del conurbano solo va en la vista de Buenos Aires
     selProv.value = cpr && datosProv[cpr] ? datosProv[cpr].nombre : '';
   }
-  const mapaPais = initMap(document.querySelector('#map'), geojson, { provincias, pais, reserva: reservaAmba, contenedorLeyenda: document.querySelector('#leyenda-mapa'), onHover, onSeleccion, onProvincia, onProvinciaHover: tooltip.mostrar });
-  const mapaAmba = initMap(document.querySelector('#map-amba'), geojson, { filtro: esAMBA, activo: esPartidoGBA, conLeyenda: false, conZoom: false, meridiano: 58.5, relleno: 6, provincias, onHover, onSeleccion });
+  const mapaPais = initMap(document.querySelector('#map'), geojson, { provincias, resumen, reserva: reservaAmba, contenedorLeyenda: document.querySelector('#leyenda-mapa'), onHover, onSeleccion, onProvincia, onProvinciaHover: tooltip.mostrar });
+  const mapaAmba = initMap(document.querySelector('#map-amba'), geojson, { filtro: esAMBA, activo: esPartidoGBA, conLeyenda: false, conZoom: false, provincias, onHover, onSeleccion });
   const mapa = {
     setServicio(s) {
       mapaPais.setServicio(s);
@@ -113,8 +113,8 @@ async function main() {
   });
 
   const opciones = {
+    resumen: 'Resumen',
     ...Object.fromEntries(Object.entries(SERVICIOS).map(([k, v]) => [k, v.nombre])),
-    resumen: 'Resumen (0–4)',
   };
   const selector = document.querySelector('#selector');
   const nota = document.querySelector('#nota');

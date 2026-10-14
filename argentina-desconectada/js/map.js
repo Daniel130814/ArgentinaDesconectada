@@ -1,5 +1,4 @@
-// Mapa coroplético en SVG con D3: proyección, capas, zoom, leyenda y resaltado.
-// Requiere d3 v7 como global (se carga por CDN en index.html).
+// Cartografía local sobre un estilo vacío, sin mapas base ni tiles externos.
 const RAMPAS = {
   agua_red: ['#eff3ff', '#bdd7e7', '#6baed6', '#3182bd', '#08519c'],
   cloacas_red: ['#f2f0f7', '#cbc9e2', '#9e9ac8', '#756bb1', '#54278f'],
@@ -7,290 +6,242 @@ const RAMPAS = {
   internet_vivienda: ['#edf8e9', '#bae4b3', '#74c476', '#31a354', '#006d2c'],
   resumen: ['#ffffd4', '#fed98e', '#fe9929', '#d95f0e', '#993404'],
 };
-const GRIS = '#c4c4c4';
-
 export const SERVICIOS = {
   agua_red: { nombre: 'Agua de red', campo: 'pct_agua_red', hogares: 'hogares_agua_red' },
   cloacas_red: { nombre: 'Cloacas', campo: 'pct_cloacas_red', hogares: 'hogares_cloacas_red' },
   gas_red: { nombre: 'Gas de red', campo: 'pct_gas_red', hogares: 'hogares_gas_red' },
   internet_vivienda: { nombre: 'Internet', campo: 'pct_internet_vivienda', hogares: 'hogares_internet_vivienda' },
 };
+const ESPECIALES = new Set(['94021', '94028']);
+const MAX_ALTURA = 100000; // Metros visuales: escala lineal, sin significado geográfico.
+const collection = (features) => ({ type: 'FeatureCollection', features });
+const vacio = () => ({ version: 8, sources: {}, layers: [{ id: 'fondo', type: 'background', paint: { 'background-color': '#0B0D10' } }] });
 
-// Cortes fijos para todos los servicios: 0–20, 20–40, 40–60, 60–80 y 80–100 %.
-const CORTES = [20, 40, 60, 80];
-
-// Sector antártico (sin datos): queda fuera del encuadre y no se dibuja.
-// Las islas del Atlántico Sur (94021, con Malvinas) sí se dibujan, en gris.
-const ANTARTIDA = '94028';
-const ZOOM_MAX = 40;
-const DURACION = 750; // ms de la animación entre vista nacional y vista de provincia
-
-function clase(valor, cortes) {
-  let i = 0;
-  while (i < cortes.length && valor >= cortes[i]) i++;
-  return i;
+function bounds(features) {
+  const b = [180, 90, -180, -90];
+  function recorrer(c) {
+    if (typeof c[0] === 'number') {
+      b[0] = Math.min(b[0], c[0]); b[2] = Math.max(b[2], c[0]);
+      b[1] = Math.min(b[1], Math.max(-85, c[1])); b[3] = Math.max(b[3], Math.min(85, c[1]));
+    } else c.forEach(recorrer);
+  }
+  features.forEach((f) => recorrer(f.geometry.coordinates));
+  return [[b[0], b[1]], [b[2], b[3]]];
 }
 
-// d3 espera anillos exteriores en sentido horario; si el GeoJSON viene al revés, el polígono
-// "cubre" el resto de la esfera. Se invierte solo cuando hace falta (idempotente).
-function orientar(geometria) {
-  const poligonos = geometria.type === 'Polygon' ? [geometria.coordinates] : geometria.coordinates;
-  for (const anillos of poligonos) {
-    if (d3.geoArea({ type: 'Polygon', coordinates: anillos }) > 2 * Math.PI) anillos.forEach((a) => a.reverse());
+function rayado(map) {
+  const data = new Uint8Array(8 * 8 * 4);
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+    const i = (y * 8 + x) * 4;
+    const gris = (x + y) % 8 < 2 ? 110 : 185;
+    data.set([gris, gris, gris, 255], i);
   }
+  map.addImage('sin-censo', { width: 8, height: 8, data });
 }
 
 export function initMap(container, geojson, opciones = {}) {
   const {
-    filtro = null, activo = null, conLeyenda = true, conZoom = true, meridiano = 66, relleno = 8, reserva = () => 0,
-    contenedorLeyenda = null, provincias = null, pais = null,
+    filtro = null, activo = null, conLeyenda = true, conZoom = true,
+    reserva = () => 0, contenedorLeyenda = null, provincias = null, resumen = null,
     onHover = () => {}, onSeleccion = () => {}, onProvinciaHover = () => {}, onProvincia = () => {},
   } = opciones;
   if (!container) throw new Error('No se encontró el contenedor del mapa.');
-
-  const feats = geojson.features.filter((f) => f.properties.codigo !== ANTARTIDA && (!filtro || filtro(f)));
-  feats.forEach((f) => orientar(f.geometry));
-  // El encuadre es el territorio con datos: deja afuera las islas lejanas y la Antártida.
-  // Con `activo` (recuadro del AMBA) solo cuentan para el encuadre los departamentos activos.
-  const encuadre = { type: 'FeatureCollection', features: feats.filter((f) => !f.properties.sin_datos && (!activo || activo(f))) };
-  const limites = provincias
-    ? provincias.features.filter((f) => feats.some((d) => d.properties.codigo.startsWith(f.properties.cpr)))
-    : [];
-  limites.forEach((f) => orientar(f.geometry));
-  const contorno = pais ? pais.features : [];
-  contorno.forEach((f) => orientar(f.geometry));
-
-  let servicio = 'agua_red';
-  let seleccionado = null;
-  let provActual = null; // código de la provincia abierta; null = vista nacional
-  let ancho = 0;
-  let alto = 0;
-  const sinMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  // Transverse Mercator (conforme) centrada en el meridiano del territorio.
-  const proyeccion = d3.geoTransverseMercator().rotate([meridiano, 0]);
-  const ruta = d3.geoPath(proyeccion);
-
-  const raiz = d3.select(container).classed('mapa-svg', true);
-  const svg = raiz.append('svg').attr('class', 'mapa nivel-pais');
-  const mapa = svg.append('g');
-
-  const valorDe = (p) => {
-    if (p.sin_datos) return null;
-    return servicio === 'resumen' ? p.servicios_bajo_media : p[SERVICIOS[servicio].campo];
-  };
-  const colorDe = (p) => {
-    const v = valorDe(p);
-    if (v == null) return GRIS;
-    const rampa = RAMPAS[servicio];
-    return servicio === 'resumen' ? rampa[v] : rampa[clase(v, CORTES)];
-  };
-
-  // Capas, de abajo hacia arriba: departamentos, límites provinciales, resaltado.
-  const deptos = mapa
-    .append('g')
-    .selectAll('path')
-    .data(feats, (d) => d.properties.codigo)
-    .join('path')
-    .attr('class', 'depto')
-    .attr('fill', (d) => colorDe(d.properties))
-    .attr('stroke', (d) => colorDe(d.properties)); // borde del mismo color: tapa las costuras entre polígonos
-  // En la vista nacional los departamentos no captan el mouse: lo captan estas áreas provinciales.
-  const hits = conZoom ? mapa.append('g').selectAll('path').data(limites).join('path').attr('class', 'hit-prov') : null;
-  const provs = mapa.append('g').attr('class', 'provincias').selectAll('path').data(limites).join('path').attr('class', 'provincia');
-  const bordePais = mapa.append('g').selectAll('path').data(contorno).join('path').attr('class', 'pais');
-  const resalte = mapa.append('g').attr('class', 'resalte');
-  const marcaHover = resalte.append('path').attr('class', 'marca-hover');
-  const marcaHalo = resalte.append('path').attr('class', 'marca-halo');
-  const marcaSel = resalte.append('path').attr('class', 'marca-seleccion');
-
-  const esActivo = (f) => (activo ? activo(f) : provActual != null && f.properties.codigo.startsWith(provActual));
-  if (activo) svg.classed('nivel-provincia', true).classed('nivel-pais', false);
-  deptos.classed('activa', esActivo);
-
-  // Hover solo con mouse; en pantallas táctiles, un toque selecciona (el clic lo emite el toque).
-  let hover = null;
-  deptos
-    .on('pointerenter', (e, d) => {
-      if (e.pointerType !== 'mouse') return;
-      hover = d;
-      marcaHover.attr('d', ruta(d));
-      onHover(d.properties);
-    })
-    .on('pointerleave', (e) => {
-      if (e.pointerType !== 'mouse') return;
-      hover = null;
-      marcaHover.attr('d', null);
-    })
-    .on('click', (e, d) => onSeleccion(d.properties));
-
-  if (hits) {
-    hits
-      .on('pointerenter', (e, d) => {
-        if (e.pointerType !== 'mouse') return;
-        hover = d;
-        marcaHover.attr('d', ruta(d));
-        onProvinciaHover(d.properties.cpr, e);
-      })
-      .on('pointermove', (e, d) => {
-        if (e.pointerType === 'mouse') onProvinciaHover(d.properties.cpr, e);
-      })
-      .on('pointerleave', (e) => {
-        if (e.pointerType !== 'mouse') return;
-        hover = null;
-        marcaHover.attr('d', null);
-        onProvinciaHover(null);
-      })
-      .on('click', (e, d) => entrarProvincia(d.properties.cpr));
-  }
-
-  // Zoom y paneo
-  const zoom = d3.zoom().scaleExtent([1, ZOOM_MAX]);
-  let inicio = null;
-  let volver = null;
+  if (!globalThis.maplibregl) throw new Error('No se pudo cargar MapLibre.');
+  container.classList.add('mapa-gl');
+  const feats = geojson.features.filter((f) => !filtro || filtro(f)).map((f) => ({
+    ...f, properties: { ...f.properties, codigo: String(f.properties.codigo).padStart(5, '0'),
+      cpr: String(f.properties.codigo).slice(0, 2), sin_datos: !!f.properties.sin_datos || ESPECIALES.has(f.properties.codigo) },
+  }));
+  const validos = feats.filter((f) => !f.properties.sin_datos);
+  const especiales = feats.filter((f) => f.properties.sin_datos);
+  const provs = (provincias?.features || []).filter((f) => resumen?.provincias[f.properties.cpr]).map((f) => {
+    const d = resumen.provincias[f.properties.cpr];
+    const p = { ...f.properties, hogares_total: d.hogares_total };
+    for (const [k, s] of Object.entries(SERVICIOS)) p[s.campo] = 100 * d[s.hogares] / d.hogares_total;
+    p.servicios_bajo_media = Object.entries(SERVICIOS).filter(([k, s]) => p[s.campo] < resumen.media_nacional[k]).length;
+    return { ...f, properties: p };
+  });
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const mobile = () => window.matchMedia('(max-width: 860px)').matches;
+  const duration = reduced ? 0 : 650;
+  let servicio = 'agua_red', provActual = null, seleccionado = null, listo = false, modo3D = conZoom;
+  let frame = 0, visuales = new Map();
+  const host = document.createElement('div');
+  host.className = 'mapa-canvas'; container.append(host);
+  const map = new maplibregl.Map({ container: host, style: vacio(), center: [-64, -39], zoom: 3,
+    pitch: conZoom ? (mobile() ? 30 : 45) : 0, attributionControl: false, renderWorldCopies: false,
+    maxZoom: 13, minZoom: 1, dragPan: conZoom, scrollZoom: conZoom, boxZoom: conZoom,
+    doubleClickZoom: conZoom, touchZoomRotate: conZoom, keyboard: conZoom, dragRotate: conZoom });
+  const pitch = () => modo3D ? (mobile() ? 30 : 45) : 0;
+  const leyenda = conLeyenda ? (contenedorLeyenda || container.appendChild(document.createElement('div'))) : null;
+  if (leyenda) leyenda.classList.add('leyenda');
+  const volver = document.createElement('button');
+  volver.type = 'button'; volver.className = 'mapa-volver'; volver.textContent = '← Argentina'; volver.hidden = true;
   if (conZoom) {
-    volver = raiz.append('button').attr('type', 'button').attr('class', 'mapa-volver').property('hidden', true).text('← Argentina');
-    volver.on('click', () => salir());
-    inicio = raiz.append('button').attr('type', 'button').attr('class', 'mapa-inicio').attr('disabled', true).text('Volver al inicio');
-    zoom.on('zoom', (e) => {
-      mapa.attr('transform', e.transform);
-      inicio.property('disabled', e.transform.k === 1 && e.transform.x === 0 && e.transform.y === 0);
+    container.append(volver); volver.addEventListener('click', salir);
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+    map.addControl(new maplibregl.FullscreenControl({ container: container.parentElement }), 'top-right');
+    map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: 'INDEC, Censo 2022 · Cartografía INDEC/IGN' }), 'bottom-right');
+    const boton = document.createElement('button');
+    boton.type = 'button'; boton.className = 'mapa-dimension'; boton.textContent = '2D';
+    boton.setAttribute('aria-label', 'Cambiar a vista 2D'); boton.setAttribute('aria-pressed', 'false');
+    container.append(boton);
+    boton.addEventListener('click', () => {
+      modo3D = !modo3D; boton.textContent = modo3D ? '2D' : '3D';
+      boton.setAttribute('aria-label', `Cambiar a vista ${modo3D ? '2D' : '3D'}`);
+      boton.setAttribute('aria-pressed', String(!modo3D));
+      map.setMaxPitch(modo3D ? 60 : 0);
+      map.easeTo({ pitch: pitch(), bearing: modo3D ? map.getBearing() : 0, duration }); actualizarValores();
     });
-    svg.call(zoom);
-    inicio.on('click', () => svg.transition().duration(sinMovimiento ? 0 : 600).call(zoom.transform, d3.zoomIdentity));
   }
-
-  function trazar() {
-    deptos.attr('d', ruta);
-    provs.attr('d', ruta);
-    if (hits) hits.attr('d', ruta);
-    bordePais.attr('d', ruta);
-    marcaHover.attr('d', hover ? ruta(hover) : null);
-    const d = seleccionado ? ruta(seleccionado) : null;
-    marcaHalo.attr('d', d);
-    marcaSel.attr('d', d);
-  }
-
-  // Se redibuja al cambiar el tamaño del contenedor (ventana, giro del celular, layout).
-  function medir() {
-    const { width, height } = container.getBoundingClientRect();
-    if (!width || !height || (width === ancho && height === alto)) return;
-    ancho = width;
-    alto = height;
-    svg.attr('width', ancho).attr('height', alto);
-    proyeccion.fitExtent([[relleno, relleno], [ancho - relleno, alto - relleno]], encuadre);
-    trazar();
-    if (conZoom) {
-      // Margen de media pantalla: permite encuadrar provincias que están pegadas al borde del mapa.
-      zoom.extent([[0, 0], [ancho, alto]]).translateExtent([[-ancho / 2, -alto / 2], [1.5 * ancho, 1.5 * alto]]);
-      svg.call(zoom.translateBy, 0, 0); // vuelve a encajar el paneo actual en los nuevos límites
-    }
-  }
-  let pendiente = 0;
-  new ResizeObserver(() => {
-    cancelAnimationFrame(pendiente);
-    pendiente = requestAnimationFrame(medir);
-  }).observe(container);
-  medir();
-
   function dibujarLeyenda() {
-    if (!conLeyenda) return;
-    const rampa = RAMPAS[servicio];
-    let html;
-    if (servicio === 'resumen') {
-      html = '<b>Servicios bajo la media nacional<br>(departamentos, de 0 a 4)</b>';
-      html += rampa.map((c, i) => `<div><i style="background:${c}"></i>${i}</div>`).join('');
-    } else {
-      html = `<b>Hogares con ${SERVICIOS[servicio].nombre.toLowerCase()} (%)</b>`;
-      const lims = [0, ...CORTES, 100];
-      html += rampa.map((c, i) => `<div><i style="background:${c}"></i>${lims[i].toFixed(0)}% – ${lims[i + 1].toFixed(0)}%</div>`).join('');
+    if (!leyenda) return;
+    const titulo = servicio === 'resumen' ? `Altura y color: servicios bajo la media nacional<br>(${provActual ? 'departamentos' : 'provincias'}, de 0 a 4; clasifica territorios)`
+      : `Altura y color: % de hogares sin ${SERVICIOS[servicio].nombre.toLowerCase()}`;
+    leyenda.innerHTML = `<b>${titulo}</b>` + RAMPAS[servicio].map((c, i) => `<div><i style="background:${c}"></i>${servicio === 'resumen' ? i : `${i * 20}–${(i + 1) * 20}%`}</div>`).join('')
+      + '<div><i class="sin-censo"></i>Sin datos censales</div>';
+  }
+  function destino(p) {
+    const raw = servicio === 'resumen' ? p.servicios_bajo_media : p[SERVICIOS[servicio].campo];
+    if (p.sin_datos || raw == null) return { altura: 0, color: '#b9b9b9' };
+    const v = servicio === 'resumen' ? raw : Math.max(0, Math.min(100, 100 - raw));
+    return { altura: modo3D ? v / (servicio === 'resumen' ? 4 : 100) * MAX_ALTURA : 0,
+      color: RAMPAS[servicio][servicio === 'resumen' ? v : Math.min(4, Math.floor(v / 20))] };
+  }
+  // Interpolación explícita: las expresiones por entidad no garantizan transiciones de paint.
+  function actualizarValores() {
+    dibujarLeyenda(); if (!listo) return;
+    cancelAnimationFrame(frame);
+    const pasos = [['deptos', validos], ['provs', provs]].flatMap(([source, fs]) => fs.map((f) => {
+      const id = source === 'deptos' ? f.properties.codigo : f.properties.cpr;
+      const key = `${source}:${id}`, fin = destino(f.properties);
+      return { source, id, key, fin, inicio: visuales.get(key) || fin };
+    }));
+    const rgb = (c) => c.match(/\w\w/g).map((x) => parseInt(x, 16));
+    const start = performance.now();
+    function tick(now) {
+      const t = reduced ? 1 : Math.min(1, (now - start) / 450);
+      for (const paso of pasos) {
+        const a = rgb(paso.inicio.color.slice(1)), b = rgb(paso.fin.color.slice(1));
+        const color = '#' + a.map((v, i) => Math.round(v + (b[i] - v) * t).toString(16).padStart(2, '0')).join('');
+        const estado = { altura: paso.inicio.altura + (paso.fin.altura - paso.inicio.altura) * t, color };
+        visuales.set(paso.key, estado); map.setFeatureState({ source: paso.source, id: paso.id }, estado);
+      }
+      if (t < 1) frame = requestAnimationFrame(tick);
     }
-    html += `<div><i style="background:${GRIS}"></i>Sin datos</div>`;
-    leyenda.html(html);
+    frame = requestAnimationFrame(tick);
   }
-  const leyenda = conLeyenda ? (contenedorLeyenda ? d3.select(contenedorLeyenda) : raiz.append('div').attr('class', 'leyenda')) : null;
-  dibujarLeyenda();
-
-  // Acerca la vista a un conjunto de polígonos, con transición.
-  // reserva() es el ancho tapado por el recuadro del AMBA (a la izquierda): la vista se centra en el resto.
-  function encuadrar(fs, { maxZoom = 8, margen = 0.85 } = {}) {
-    if (!conZoom || !fs.length || !ancho) return;
-    const [[x0, y0], [x1, y1]] = ruta.bounds({ type: 'FeatureCollection', features: fs });
-    const izq = reserva();
-    const util = ancho - izq;
-    const k = Math.max(1, Math.min(maxZoom, margen / Math.max((x1 - x0) / util, (y1 - y0) / alto)));
-    const t = d3.zoomIdentity.translate(izq + util / 2, alto / 2).scale(k).translate(-(x0 + x1) / 2, -(y0 + y1) / 2);
-    svg.transition().duration(sinMovimiento ? 0 : DURACION).call(zoom.transform, t);
+  function fit(fs, maxZoom = 7, animar = true) {
+    if (!fs.length) return;
+    map.fitBounds(bounds(fs), { padding: { top: 65, bottom: conZoom ? 65 : 15, left: Math.min(reserva() + 25, host.clientWidth / 2), right: 45 },
+      maxZoom, pitch: pitch(), duration: animar ? duration : 0 });
   }
-
   function actualizarNivel() {
-    const enProvincia = provActual != null;
-    svg.classed('nivel-provincia', enProvincia).classed('nivel-pais', !enProvincia);
-    deptos.classed('activa', esActivo);
-    if (inicio) inicio.property('hidden', enProvincia);
-    if (volver) volver.property('hidden', !enProvincia);
-    hover = null;
-    marcaHover.attr('d', null);
+    if (!listo) return;
+    const nacional = conZoom && provActual == null;
+    for (const id of ['provincia-base', 'provincia-volumen', 'provincia-borde']) map.setLayoutProperty(id, 'visibility', nacional ? 'visible' : 'none');
+    for (const id of ['departamento-base', 'departamento-volumen', 'departamento-borde']) {
+      map.setLayoutProperty(id, 'visibility', nacional ? 'none' : 'visible');
+      map.setFilter(id, activo ? ['in', ['get', 'codigo'], ['literal', validos.filter(activo).map((f) => f.properties.codigo)]] : ['==', ['get', 'cpr'], provActual || '']);
+    }
+    map.setLayoutProperty('resto', 'visibility', !nacional ? 'visible' : 'none');
+    map.setFilter('resto', activo ? ['!', ['in', ['get', 'codigo'], ['literal', validos.filter(activo).map((f) => f.properties.codigo)]]] : ['!=', ['get', 'cpr'], provActual || '']);
+    etiquetas.forEach(({ marker }) => { marker.getElement().hidden = !nacional; });
+    volver.hidden = !provActual; dibujarLeyenda();
   }
-
-  // Abre una provincia: zoom animado, malla de sus departamentos y el resto atenuado.
   function abrir(cpr) {
-    provActual = cpr;
-    actualizarNivel();
-    onProvincia(cpr); // el recuadro del AMBA se muestra o se oculta antes de calcular el encuadre
-  }
-  function entrarProvincia(cpr) {
-    const fs = feats.filter((f) => f.properties.codigo.startsWith(cpr) && !f.properties.sin_datos);
-    if (!conZoom || !fs.length) return;
-    abrir(cpr);
-    encuadrar(fs, { maxZoom: ZOOM_MAX, margen: 0.9 });
+    if (!provs.some((f) => f.properties.cpr === cpr)) return;
+    provActual = cpr; onProvinciaHover(null); onProvincia(cpr); actualizarNivel();
+    if (listo) fit(validos.filter((f) => f.properties.cpr === cpr));
   }
   function salir() {
-    if (provActual == null) return;
-    provActual = null;
-    actualizarNivel();
-    onProvincia(null);
-    svg.transition().duration(sinMovimiento ? 0 : DURACION).call(zoom.transform, d3.zoomIdentity);
+    if (!provActual) return;
+    provActual = null; seleccionado = null; onProvinciaHover(null); onProvincia(null); actualizarNivel();
+    if (listo) fit(validos);
   }
-  const porCodigo = (codigo) => feats.find((f) => f.properties.codigo === codigo);
+  const etiquetas = [];
+  map.on('load', () => {
+    rayado(map);
+    map.addSource('deptos', { type: 'geojson', data: collection(validos), promoteId: 'codigo' });
+    map.addSource('provs', { type: 'geojson', data: collection(provs), promoteId: 'cpr' });
+    map.addSource('sin-datos', { type: 'geojson', data: collection(especiales) });
+    map.addLayer({ id: 'resto', type: 'fill', source: activo ? 'deptos' : 'provs', paint: { 'fill-color': ['coalesce', ['feature-state', 'color'], '#b9b9b9'], 'fill-opacity': 0.2 } });
+    for (const [prefijo, source] of [['provincia', 'provs'], ['departamento', 'deptos']]) {
+      const color = ['coalesce', ['feature-state', 'color'], '#b9b9b9'];
+      map.addLayer({ id: `${prefijo}-base`, type: 'fill', source, paint: { 'fill-color': color } });
+      map.addLayer({ id: `${prefijo}-volumen`, type: 'fill-extrusion', source, paint: {
+        'fill-extrusion-color': color, 'fill-extrusion-height': ['coalesce', ['feature-state', 'altura'], 0], 'fill-extrusion-opacity': 1 } });
+      map.addLayer({ id: `${prefijo}-borde`, type: 'line', source, paint: { 'line-color': '#dae1eb', 'line-width': prefijo === 'provincia' ? 1 : 0.5 } });
+    }
+    map.addLayer({ id: 'sin-censo', type: 'fill', source: 'sin-datos', paint: { 'fill-pattern': 'sin-censo' } });
+    map.addLayer({ id: 'seleccion', type: 'line', source: 'deptos', filter: ['==', ['get', 'codigo'], ''], paint: { 'line-color': '#ff4f91', 'line-width': 3 } });
+    if (conZoom) for (const f of provs) {
+      const b = bounds(validos.filter((d) => d.properties.cpr === f.properties.cpr));
+      const el = document.createElement('button'); el.type = 'button'; el.className = 'etiqueta-prov';
+      el.textContent = f.properties.nombre; el.setAttribute('aria-label', `Ver departamentos de ${f.properties.nombre}`);
+      el.addEventListener('click', (e) => { e.stopPropagation(); abrir(f.properties.cpr); });
+      const marker = new maplibregl.Marker({ element: el }).setLngLat([(b[0][0] + b[1][0]) / 2, (b[0][1] + b[1][1]) / 2]).addTo(map);
+      etiquetas.push({ marker });
+    }
+    listo = true; actualizarNivel(); actualizarValores();
+    if (seleccionado) map.setFilter('seleccion', ['==', ['get', 'codigo'], seleccionado]);
+    fit(activo ? validos.filter(activo) : provActual ? validos.filter((f) => f.properties.cpr === provActual) : validos, conZoom ? 7 : 10, false);
+  });
+  map.on('error', (e) => { const status = document.querySelector('#status'); if (status) status.textContent = `No se pudo dibujar el mapa: ${e.error.message}`; console.error(e.error); });
+  function hit(e) {
+    if (!listo) return null;
+    const nacional = conZoom && !provActual;
+    const layers = nacional ? ['provincia-volumen', 'provincia-base'] : ['departamento-volumen', 'departamento-base'];
+    return map.queryRenderedFeatures(e.point, { layers })[0];
+  }
+  map.on('click', (e) => {
+    const f = hit(e); if (!f) return;
+    if (conZoom && !provActual) abrir(f.properties.cpr);
+    else onSeleccion(feats.find((d) => d.properties.codigo === f.properties.codigo).properties);
+  });
+  map.on('mousemove', (e) => {
+    if (e.originalEvent?.sourceCapabilities?.firesTouchEvents) return;
+    const f = hit(e); map.getCanvas().style.cursor = f ? 'pointer' : '';
+    if (conZoom && !provActual) onProvinciaHover(f?.properties.cpr || null, e.originalEvent);
+    else if (f) onHover(feats.find((d) => d.properties.codigo === f.properties.codigo).properties);
+  });
+  map.getCanvas().addEventListener('mouseleave', () => onProvinciaHover(null));
+  new ResizeObserver(() => {
+    map.resize();
+    if (listo && !conZoom && host.clientWidth) fit(activo ? validos.filter(activo) : validos, 10, false);
+  }).observe(container);
 
+  // Recuadro permanente: ambas geometrías siguen presentes en el mapa principal.
+  if (conZoom && especiales.length) {
+    const inset = document.createElement('div'); inset.className = 'territorios-sin-censo';
+    const titulo = document.createElement('span'); titulo.textContent = 'Antártida e Islas del Atlántico Sur · Sin datos censales'; inset.append(titulo);
+    const miniHost = document.createElement('div'); miniHost.className = 'territorios-canvas'; inset.append(miniHost); container.append(inset);
+    const mini = new maplibregl.Map({ container: miniHost, style: vacio(), interactive: false, attributionControl: false, renderWorldCopies: false });
+    mini.on('load', () => {
+      rayado(mini); mini.addSource('territorios', { type: 'geojson', data: collection(especiales) });
+      mini.addLayer({ id: 'territorios', type: 'fill', source: 'territorios', paint: { 'fill-pattern': 'sin-censo' } });
+      mini.fitBounds(bounds(especiales), { padding: 10, duration: 0 });
+    });
+    new ResizeObserver(() => mini.resize()).observe(miniHost);
+  }
+  dibujarLeyenda();
   return {
-    salir,
-    nivel: () => (provActual == null ? 'pais' : 'provincia'),
-    setServicio(s) {
-      servicio = s;
-      deptos.interrupt().transition().duration(sinMovimiento ? 0 : 450).attr('fill', (d) => colorDe(d.properties)).attr('stroke', (d) => colorDe(d.properties));
-      dibujarLeyenda();
-    },
-    // Resalta un departamento con borde oscuro (sin mover el mapa); null quita la marca.
-    marcar(codigo) {
-      seleccionado = (codigo && porCodigo(codigo)) || null;
-      const d = seleccionado ? ruta(seleccionado) : null;
-      marcaHalo.attr('d', d);
-      marcaSel.attr('d', d);
-    },
-    // Abre la provincia del departamento (si no estaba abierta) y se acerca a él.
+    salir, nivel: () => provActual == null ? 'pais' : 'provincia',
+    setServicio(s) { if (s !== 'resumen' && !SERVICIOS[s]) return; servicio = s; actualizarValores(); },
+    marcar(codigo) { seleccionado = codigo; if (listo) map.setFilter('seleccion', ['==', ['get', 'codigo'], codigo || '']); },
     enfocar(codigo) {
       if (!conZoom) return;
-      const cpr = codigo.slice(0, 2);
-      if (provActual !== cpr) abrir(cpr);
-      this.marcar(codigo);
-      if (seleccionado) encuadrar([seleccionado], { maxZoom: ZOOM_MAX, margen: 0.35 });
+      const f = validos.find((d) => d.properties.codigo === codigo); if (!f) return;
+      if (provActual !== f.properties.cpr) abrir(f.properties.cpr);
+      this.marcar(codigo); if (listo) fit([f], 11);
     },
-    // Las islas del Atlántico Sur y la Antártida no tienen provincia: no se pueden abrir.
-    entrarProvincia(nombre) {
-      const f = limites.find((l) => l.properties.nombre === nombre);
-      if (f) entrarProvincia(f.properties.cpr);
-      else salir();
-    },
+    entrarProvincia(nombre) { const f = provs.find((d) => d.properties.nombre === nombre); if (f) abrir(f.properties.cpr); else salir(); },
   };
 }
 
-// Los 24 partidos del conurbano bonaerense (Gran Buenos Aires).
 const PARTIDOS_GBA = new Set([
   '06028', '06035', '06091', '06260', '06270', '06274', '06371', '06408', '06410', '06412', '06427', '06434',
   '06490', '06515', '06539', '06560', '06568', '06658', '06749', '06756', '06760', '06805', '06840', '06861',
 ]);
 export const esPartidoGBA = (f) => PARTIDOS_GBA.has(f.properties.codigo);
-// Para el recuadro: los 24 partidos, más CABA como referencia (atenuada).
 export const esAMBA = (f) => f.properties.codigo.startsWith('02') || esPartidoGBA(f);

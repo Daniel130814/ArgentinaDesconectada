@@ -90,39 +90,6 @@ h1 {
 .leyenda b { display: block; margin-bottom: 0.3rem; font-weight: 600; }
 .leyenda i { display: inline-block; width: 1.2rem; height: 0.75rem; margin-right: 0.45rem; vertical-align: middle; border: 1px solid rgba(16, 28, 42, 0.3); }
 
-/* Mapa SVG (D3): el grosor de los trazos no cambia con el zoom */
-.mapa-svg { position: relative; overflow: hidden; background: #d7dee6; font-family: var(--sans); }
-.mapa { display: block; touch-action: none; -webkit-tap-highlight-color: transparent; }
-/* Dos niveles: en la vista nacional, relleno sin malla; al abrir una provincia, malla solo en esa provincia */
-.mapa .depto { stroke-width: 0.5; vector-effect: non-scaling-stroke; pointer-events: none; transition: opacity 0.4s; }
-.mapa.nivel-provincia .depto { opacity: 0.25; }
-.mapa.nivel-provincia .depto.activa { opacity: 1; stroke: #fff; pointer-events: all; cursor: pointer; }
-.mapa .hit-prov { fill: transparent; pointer-events: none; }
-.mapa.nivel-pais .hit-prov { pointer-events: all; cursor: pointer; }
-.mapa.nivel-pais .hit-prov:hover { fill: rgba(16, 28, 42, 0.2); }
-.mapa .provincia { fill: none; stroke: #000; stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
-.mapa .pais { fill: none; stroke: #000; stroke-width: 2; vector-effect: non-scaling-stroke; pointer-events: none; }
-.mapa .resalte path { fill: none; vector-effect: non-scaling-stroke; pointer-events: none; stroke-linejoin: round; }
-.mapa .marca-hover { stroke: var(--tinta); stroke-width: 1.5; }
-.mapa .marca-halo { stroke: #fff; stroke-width: 5.5; }
-.mapa .marca-seleccion { stroke: var(--tinta); stroke-width: 2.8; }
-#leyenda-mapa { position: absolute; right: 0.75rem; bottom: 0.75rem; z-index: 2; }
-.mapa-inicio {
-  position: absolute; top: 0.75rem; right: 0.75rem; padding: 0.4rem 0.8rem;
-  font: 600 0.9rem var(--sans); color: var(--tinta); background: #fff;
-  border: 1.5px solid var(--tinta); border-radius: 0; cursor: pointer;
-}
-.mapa-inicio:hover:not(:disabled) { background: var(--tinta); color: #fff; }
-.mapa-inicio:disabled { color: var(--tinta-suave); border-color: var(--filete); cursor: default; }
-.mapa-inicio:focus-visible, .mapa-volver:focus-visible { outline: 3px solid var(--acento); outline-offset: 2px; }
-.mapa-volver {
-  position: absolute; top: 0.75rem; left: 0.75rem; padding: 0.4rem 0.8rem;
-  font: 600 0.9rem var(--sans); color: #fff; background: var(--tinta);
-  border: 1.5px solid var(--tinta); border-radius: 0; cursor: pointer;
-}
-.mapa-volver:hover { background: #fff; color: var(--tinta); }
-.mapa-svg [hidden], .amba[hidden] { display: none; }
-
 /* Tooltip provincial */
 .tooltip-prov {
   position: absolute; top: 0; left: 0; z-index: 3; width: 17rem; padding: 0.6rem 0.75rem; pointer-events: none;
@@ -191,3 +158,40 @@ h1 {
 #ubicar input:focus-visible, #ubicar select:focus-visible { outline: 3px solid var(--acento); outline-offset: 2px; }
 #ubicar .aviso { margin: 0.3rem 0 0; min-height: 1.2em; font-size: 0.85rem; color: #a1002f; }
 #panel .acciones { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: flex-end; }
+
+/* Mapa y controles */
+.mapa-gl, #map, #map-amba { position: relative; background: #0B0D10; overflow: hidden; font-family: var(--sans); }
+.mapa-canvas { position: absolute; inset: 0; }
+.mapa-gl [hidden], .amba[hidden] { display: none; }
+.mapas > #selector { position: absolute; top: 0; left: 0; right: 0; z-index: 4; display: flex; overflow-x: auto; border: 0; background: rgba(11, 13, 16, 0.96); }
+.mapas > #selector button { flex: 1; width: auto; min-width: max-content; display: block; padding: 0.6rem 0.65rem; border: 0; border-bottom: 3px solid transparent; color: #e9edf1; font-size: 0.95rem; text-align: center; }
+.mapas > #selector button[aria-selected="true"] { border-bottom-color: #ff4f91; background: #253040; }
+.mapas > #selector button:hover { background: #253040; }
+.mapas > #selector .media { display: block; color: #b9c3d0; font-size: 0.7rem; }
+.mapa-volver, .mapa-dimension { position: absolute; z-index: 3; top: 78px; padding: 0.45rem 0.7rem; background: #fff; color: #101c2a; border: 1px solid #aab4c0; font: 600 0.9rem var(--sans); cursor: pointer; }
+.mapa-volver { left: 12px; }
+.mapa-dimension { right: 50px; }
+.mapa-volver:focus-visible, .mapa-dimension:focus-visible, .etiqueta-prov:focus-visible { outline: 3px solid #ff4f91; outline-offset: 2px; }
+.mapa-gl .maplibregl-ctrl-top-right { top: 68px; }
+.mapa-gl .maplibregl-ctrl-attrib { font: 400 0.68rem/1.5 var(--sans); max-width: 100%; }
+#leyenda-mapa { position: absolute; right: 0.75rem; bottom: 2.3rem; z-index: 2; max-width: 20rem; }
+.leyenda .sin-censo { background: repeating-linear-gradient(135deg, #b9b9b9 0 4px, #6e6e6e 4px 6px); }
+.etiqueta-prov { max-width: 115px; border: 0; padding: 2px; background: transparent; color: #fff; font: 600 0.7rem/1.05 var(--sans); text-shadow: 0 1px 3px #000, 1px 0 3px #000, -1px 0 3px #000; cursor: pointer; }
+.etiqueta-prov::before { content: ''; display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #fff; margin-right: 4px; box-shadow: 0 0 2px #000; }
+.territorios-sin-censo { position: absolute; bottom: 2.3rem; left: 0.75rem; width: 150px; z-index: 2; border: 1px solid #6e6e6e; background: #0B0D10; color: #ddd; }
+.territorios-sin-censo > span { display: block; padding: 4px 6px; font-size: 0.68rem; line-height: 1.2; }
+.territorios-canvas { height: 145px; }
+.amba { z-index: 3; bottom: 14rem; }
+@media (max-width: 1100px) {
+  #leyenda-mapa { position: relative; right: auto; bottom: auto; max-width: none; }
+  .territorios-sin-censo { width: 110px; bottom: 2rem; }
+  .territorios-canvas { height: 100px; }
+}
+@media (max-width: 860px) {
+  .mapas > #selector { position: relative; }
+  .mapas > #selector button { font-size: 0.85rem; padding: 0.5rem; }
+  .mapas > #selector .media { font-size: 0.65rem; }
+  .mapa-gl .maplibregl-ctrl-top-right { top: 0; }
+  .mapa-volver, .mapa-dimension { top: 10px; }
+  .etiqueta-prov { max-width: 85px; font-size: 0.6rem; }
+}
