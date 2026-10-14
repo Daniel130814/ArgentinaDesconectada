@@ -11,6 +11,7 @@ const NOTAS = {
   resumen: 'Clasifica territorios: cuenta en cuántos de los 4 servicios el departamento está bajo la media nacional. No es la cantidad de hogares sin los cuatro servicios.',
 };
 
+const ESCUDO = '<svg class="escudo" viewBox="0 0 64 76" aria-hidden="true"><path class="escudo-borde" d="M6 3h52a3 3 0 0 1 3 3v31c0 17-11 28-29 36C14 65 3 54 3 37V6a3 3 0 0 1 3-3Z"/><path class="escudo-filete" d="M8.5 7h47a1.5 1.5 0 0 1 1.5 1.5V37c0 14.500-9 24-25 31C16 61 7 51.500 7 37V8.500A1.500 1.500 0 0 1 8.500 7Z"/></svg>';
 const status = document.querySelector('#status');
 
 async function main() {
@@ -115,7 +116,10 @@ async function main() {
     b.type = 'button';
     b.dataset.clave = clave;
     b.setAttribute('role', 'tab');
+    // Escudo de ruta nacional: blanco, con borde negro; el nombre del servicio va adentro.
+    b.insertAdjacentHTML('afterbegin', ESCUDO);
     const etiqueta = document.createElement('span');
+    etiqueta.className = 'escudo-nombre';
     etiqueta.textContent = nombre;
     b.append(etiqueta);
     if (media && media[clave] != null) {
