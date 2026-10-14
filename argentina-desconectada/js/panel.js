@@ -22,11 +22,57 @@ function mediasProvinciales(geojson) {
   return medias;
 }
 
-export function initPanel(container, geojson, mediaNacional, onSoltar = () => {}) {
+// Una fila por servicio con el porcentaje y la cantidad de hogares de una provincia.
+function filasProvincia(d, mediaNacional, activa = null) {
+  return Object.entries(SERVICIOS)
+    .map(([k, s]) => `<div class="fila${k === activa ? ' activa' : ''}">
+      <dt>${s.nombre}</dt>
+      <dd><strong>${pct(d[k])}</strong> <span class="hogares">${miles.format(d[s.hogares])} de ${miles.format(d.hogares_total)} hogares</span>
+      ${mediaNacional ? `<span class="medias">Nación ${pct(mediaNacional[k])}</span>` : ''}</dd>
+    </div>`)
+    .join('');
+}
+
+// Tooltip con el resumen provincial al pasar el mouse por una provincia (vista nacional).
+export function initTooltip(contenedor, provincias, mediaNacional) {
+  const el = document.createElement('div');
+  el.className = 'tooltip-prov';
+  el.hidden = true;
+  contenedor.append(el);
+  let codigo = null;
+  return {
+    mostrar(cpr, evento) {
+      const d = cpr && provincias[cpr];
+      if (!d) {
+        el.hidden = true;
+        codigo = null;
+        return;
+      }
+      if (codigo !== cpr) {
+        el.innerHTML = `<strong>${d.nombre}</strong><dl>${filasProvincia(d, mediaNacional)}</dl><p>Clic para ver sus departamentos</p>`;
+        codigo = cpr;
+      }
+      el.hidden = false;
+      const r = contenedor.getBoundingClientRect();
+      let x = evento.clientX - r.left + 16;
+      let y = evento.clientY - r.top + 16;
+      if (x + el.offsetWidth > r.width - 8) x = evento.clientX - r.left - el.offsetWidth - 16;
+      if (y + el.offsetHeight > r.height - 8) y = r.height - el.offsetHeight - 8;
+      el.style.transform = `translate(${Math.max(8, x)}px, ${Math.max(8, y)}px)`;
+    },
+    ocultar() {
+      el.hidden = true;
+      codigo = null;
+    },
+  };
+}
+
+export function initPanel(container, geojson, mediaNacional, onSoltar = () => {}, onVolver = () => {}, resumenProvincias = {}) {
   if (!container) throw new Error('No se encontró el contenedor del panel.');
   const provinciales = mediasProvinciales(geojson);
   let servicio = 'agua_red';
   let actual = null;
+  let provincia = null; // código de la provincia abierta en el mapa (null = vista nacional)
   let fijo = false; // el departamento mostrado está seleccionado y no cambia al mover el mouse
   let fijados = []; // hasta dos departamentos, el más antiguo primero
 
@@ -48,8 +94,16 @@ export function initPanel(container, geojson, mediaNacional, onSoltar = () => {}
   }
 
   function renderVivo() {
+    if (!actual && provincia && resumenProvincias[provincia]) {
+      const d = resumenProvincias[provincia];
+      vivo.innerHTML = `<div class="encabezado"><div><h2>${d.nombre}</h2><p class="prov">Provincia, ${miles.format(d.hogares_total)} hogares</p></div>
+        <div class="acciones"><button type="button" data-accion="volver">← Argentina</button></div></div>
+        <dl>${filasProvincia(d, mediaNacional, servicio)}</dl>
+        <p class="indice">Pasá el mouse por un departamento para ver sus datos. Hacé clic o tocá para dejarlo fijo.</p>`;
+      return;
+    }
     if (!actual) {
-      vivo.innerHTML = '<p class="vacio">Pasá el mouse por un departamento para ver sus datos. Hacé clic o tocá para dejarlo fijo.</p>';
+      vivo.innerHTML = '<p class="vacio">Pasá el mouse por una provincia para ver su resumen. Hacé clic o tocá para acercarte y ver sus departamentos.</p>';
       return;
     }
     if (actual.sin_datos) {
@@ -110,6 +164,10 @@ export function initPanel(container, geojson, mediaNacional, onSoltar = () => {}
       onSoltar();
       return;
     }
+    if (boton.dataset.accion === 'volver') {
+      onVolver();
+      return;
+    }
     if (boton.dataset.accion === 'fijar' && actual && !actual.sin_datos && !estaFijado(actual)) {
       fijados = [...fijados, actual].slice(-2);
     } else if (boton.dataset.accion === 'quitar') {
@@ -123,6 +181,11 @@ export function initPanel(container, geojson, mediaNacional, onSoltar = () => {}
     mostrar(p, esFijo = false) {
       actual = p;
       fijo = esFijo;
+      renderVivo();
+    },
+    // Provincia abierta en el mapa: con ningún departamento elegido, el panel muestra su resumen.
+    mostrarProvincia(cpr) {
+      provincia = cpr;
       renderVivo();
     },
     setServicio(s) {

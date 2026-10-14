@@ -12,6 +12,7 @@ Entradas:
     data/raw/departamentos.geojson
 Salidas:
     data/processed/departamentos_servicios.geojson
+    data/processed/provincias.geojson, pais.geojson
     data/processed/resumen_nacional.json
 """
 import json
@@ -102,6 +103,13 @@ sal_prov = OUT / "provincias.geojson"
 limites[["cpr", "nombre", "geometry"]].to_file(sal_prov, driver="GeoJSON", COORDINATE_PRECISION=4)
 print(f"OK → {sal_prov} ({sal_prov.stat().st_size / 1e6:.2f} MB, {len(limites)} provincias)")
 
+# Contorno del país: unión de todos los departamentos con datos (sin islas lejanas ni Antártida)
+pais = geo[~geo["cde"].isin(sin_datos)].dissolve().reset_index(drop=True)[["geometry"]]
+pais["geometry"] = pais.geometry.simplify(TOLERANCIA_SIMPLIFICACION, preserve_topology=True)
+sal_pais = OUT / "pais.geojson"
+pais.to_file(sal_pais, driver="GeoJSON", COORDINATE_PRECISION=4)
+print(f"OK → {sal_pais} ({sal_pais.stat().st_size / 1e6:.2f} MB)")
+
 # ---------------------------------------------------------------- resumen para la página
 resumen = {
     "fuente": "INDEC, Censo Nacional de Población, Hogares y Viviendas 2022",
@@ -109,7 +117,12 @@ resumen = {
     "total_hogares": int(total_hogares),
     "media_nacional": media_nacional,
     "provincias": {
-        r["codigo"]: {"nombre": r["territorio"], **{s: round(r[f"pct_{s}"], 1) for s in SERVICIOS}}
+        r["codigo"]: {
+            "nombre": r["territorio"],
+            "hogares_total": int(r["hogares_total"]),
+            **{f"hogares_{s}": int(r[f"hogares_{s}"]) for s in SERVICIOS},
+            **{s: round(r[f"pct_{s}"], 1) for s in SERVICIOS},
+        }
         for _, r in prov.iterrows()
     },
 }
