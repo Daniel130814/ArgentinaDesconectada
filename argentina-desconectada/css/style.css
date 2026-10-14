@@ -1,10 +1,134 @@
 :root {
-  font-family: system-ui, sans-serif;
-  color: #172635;
-  background: #f5f7fa;
+  --papel: #e9edf1;
+  --tinta: #101c2a;
+  --tinta-suave: #44546a;
+  --filete: #aab4c0;
+  --acento: #d6246e;
+  --serif: "Newsreader", Georgia, serif;
+  --sans: "IBM Plex Sans Condensed", system-ui, sans-serif;
+  font-family: var(--serif);
+  color: var(--tinta);
+  background: var(--papel);
 }
 
-body { margin: 0; padding: 2rem; }
-main { max-width: 1200px; margin: auto; }
-#map { min-height: 60vh; background: #e5ebf1; border-radius: 0.75rem; }
-#panel { margin-top: 1rem; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--papel); }
+
+.pagina {
+  display: grid;
+  grid-template-columns: minmax(320px, 30rem) 1fr;
+  grid-template-areas: "cabecera mapa" "cuerpo mapa";
+  grid-template-rows: auto 1fr;
+  min-height: 100vh;
+}
+.pagina > header { grid-area: cabecera; }
+.pagina > main { grid-area: cuerpo; }
+.mapas { grid-area: mapa; position: sticky; top: 0; height: 100vh; }
+#map { height: 100%; background: #d7dee6; }
+
+/* Mapa del AMBA: recuadro sobre el mapa del país, con los mismos colores y cortes */
+.amba {
+  position: absolute; left: 1rem; bottom: 1rem; z-index: 1000;
+  width: clamp(240px, 26vw, 380px); margin: 0;
+  background: var(--papel); border: 2px solid var(--tinta);
+}
+.amba figcaption { padding: 0.35rem 0.6rem; font: 600 0.85rem/1.3 var(--sans); border-bottom: 1px solid var(--filete); }
+#map-amba { height: clamp(220px, 30vh, 340px); background: #d7dee6; }
+
+.texto { padding: 0 2rem; }
+header.texto { padding-top: 2.5rem; }
+main.texto { padding-bottom: 2rem; }
+
+h1 {
+  margin: 0 0 1rem;
+  font-weight: 800;
+  font-size: clamp(2rem, 3.2vw, 2.9rem);
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.bajada { margin: 0 0 1.75rem; font-size: 1.15rem; line-height: 1.45; color: var(--tinta-suave); max-width: 34rem; }
+
+/* Selector: lista de servicios con la media nacional de cada uno */
+#selector { border-top: 2px solid var(--tinta); }
+#selector button {
+  display: flex; width: 100%; justify-content: space-between; align-items: baseline; gap: 1rem;
+  padding: 0.7rem 0.25rem 0.7rem 0.75rem;
+  font: 600 1.05rem/1.2 var(--sans);
+  text-align: left; color: var(--tinta);
+  background: none; border: 0; border-bottom: 1px solid var(--filete);
+  border-left: 4px solid transparent; cursor: pointer;
+}
+#selector button:hover { background: rgba(16, 28, 42, 0.05); }
+#selector button[aria-selected="true"] { border-left-color: var(--acento); background: rgba(255, 255, 255, 0.55); }
+#selector button:focus-visible { outline: 3px solid var(--acento); outline-offset: -3px; }
+#selector .media { font-weight: 400; color: var(--tinta-suave); white-space: nowrap; }
+
+.nota { margin: 1rem 0; font-size: 1rem; line-height: 1.5; color: var(--tinta); max-width: 34rem; min-height: 4.5em; }
+#panel { margin: 1rem 0; padding-top: 0.75rem; border-top: 2px solid var(--tinta); min-height: 17rem; }
+#panel h2 { margin: 0; font-size: 1.5rem; font-weight: 800; line-height: 1.1; }
+#panel .prov { margin: 0.15rem 0 0.75rem; color: var(--tinta-suave); }
+#panel dl { margin: 0; }
+#panel .fila { padding: 0.45rem 0 0.45rem 0.6rem; border-bottom: 1px solid var(--filete); border-left: 4px solid transparent; font-family: var(--sans); }
+#panel .fila.activa { border-left-color: var(--acento); background: rgba(255, 255, 255, 0.55); }
+#panel dt { font-weight: 600; }
+#panel dd { margin: 0; }
+#panel dd strong { font-size: 1.15rem; }
+#panel .hogares { color: var(--tinta); }
+#panel .medias { display: block; font-size: 0.85rem; color: var(--tinta-suave); }
+#panel .indice { margin: 0.75rem 0 0; font-size: 0.9rem; color: var(--tinta-suave); }
+#panel .vacio { margin: 0; color: var(--tinta-suave); }
+#status { color: #a1002f; font-family: var(--sans); }
+.fuente { margin-top: 1.5rem; padding-top: 0.75rem; border-top: 1px solid var(--filete); font: 400 0.82rem/1.45 var(--sans); color: var(--tinta-suave); max-width: 34rem; }
+
+/* Leyenda y tooltip del mapa */
+.leyenda {
+  background: rgba(233, 237, 241, 0.96); padding: 0.7rem 0.85rem;
+  border: 1px solid var(--filete); border-radius: 0;
+  font: 400 0.82rem/1.5 var(--sans); color: var(--tinta);
+}
+.leyenda b { display: block; margin-bottom: 0.3rem; font-weight: 600; }
+.leyenda i { display: inline-block; width: 1.2rem; height: 0.75rem; margin-right: 0.45rem; vertical-align: middle; border: 1px solid rgba(16, 28, 42, 0.3); }
+.leaflet-tooltip { font: 400 0.9rem/1.35 var(--sans); color: var(--tinta); border: 1px solid var(--tinta); border-radius: 0; box-shadow: none; }
+.leaflet-container { font-family: var(--sans); background: #d7dee6; }
+
+@media (max-width: 860px) {
+  .pagina { display: block; }
+  .texto { padding: 0 1rem; }
+  header.texto { padding-top: 1.5rem; }
+  .mapas { position: relative; height: auto; margin-top: 0.5rem; }
+  #map { height: 62vh; min-height: 360px; }
+  main.texto { padding-bottom: 1.5rem; }
+  .nota { min-height: 0; }
+  #panel { min-height: 0; }
+  /* en celular el mapa del AMBA va debajo del mapa del país */
+  .amba { position: static; width: auto; border-width: 2px 0 0; }
+  #map-amba { height: 50vh; min-height: 300px; }
+}
+
+/* Comparación de dos departamentos */
+#panel .encabezado { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+#panel button { font: 600 0.9rem var(--sans); padding: 0.35rem 0.8rem; color: var(--tinta); background: #fff; border: 1.5px solid var(--tinta); border-radius: 0; cursor: pointer; }
+#panel button:hover:not(:disabled) { background: var(--tinta); color: #fff; }
+#panel button:disabled { color: var(--tinta-suave); border-color: var(--filete); cursor: default; }
+#panel button:focus-visible { outline: 3px solid var(--acento); outline-offset: 2px; }
+#panel .comparacion:not(:empty) { margin-top: 1.25rem; padding-top: 0.75rem; border-top: 2px solid var(--tinta); }
+#panel h3 { margin: 0 0 0.5rem; font-size: 1.2rem; font-weight: 800; }
+#panel .comparacion .vacio { line-height: 1.8; }
+#panel table { width: 100%; border-collapse: collapse; font-family: var(--sans); font-size: 0.9rem; }
+#panel th, #panel td { padding: 0.45rem 0.4rem; border-bottom: 1px solid var(--filete); text-align: left; vertical-align: top; }
+#panel thead th { font-weight: 600; border-bottom: 2px solid var(--tinta); }
+#panel th span, #panel td span { display: block; font-weight: 400; font-size: 0.78rem; color: var(--tinta-suave); }
+#panel tbody th { font-weight: 600; }
+#panel td strong { font-size: 1.05rem; }
+#panel tr.activa > * { background: rgba(255, 255, 255, 0.55); }
+#panel .dif { white-space: nowrap; font-weight: 600; }
+#panel th .quitar { display: block; margin-top: 0.3rem; padding: 0.15rem 0.5rem; font-size: 0.78rem; }
+
+/* Buscador y zoom por provincia */
+#ubicar { margin: 1rem 0; font-family: var(--sans); }
+#ubicar label { display: block; margin: 0.6rem 0 0.25rem; font-weight: 600; font-size: 0.95rem; }
+#ubicar input, #ubicar select { width: 100%; padding: 0.55rem 0.7rem; font: 400 1rem var(--sans); color: var(--tinta); background: #fff; border: 1.5px solid var(--tinta); border-radius: 0; }
+#ubicar input:focus-visible, #ubicar select:focus-visible { outline: 3px solid var(--acento); outline-offset: 2px; }
+#ubicar .aviso { margin: 0.3rem 0 0; min-height: 1.2em; font-size: 0.85rem; color: #a1002f; }
+#panel .acciones { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: flex-end; }

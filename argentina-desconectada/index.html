@@ -4,15 +4,46 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Argentina desconectada</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;0,6..72,800;1,6..72,400&display=swap">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <link rel="stylesheet" href="css/style.css">
   </head>
   <body>
-    <header><h1>Argentina desconectada</h1></header>
-    <main>
-      <section id="map" aria-label="Mapa de conectividad"></section>
-      <aside id="panel" aria-label="Comparación de territorios"></aside>
-      <p id="status" role="status">Proyecto listo para incorporar datos.</p>
-    </main>
+    <div class="pagina">
+      <header class="texto">
+        <h1>Dónde vivís define a qué redes estás conectado</h1>
+        <p class="bajada">Agua, cloacas, gas e internet en los hogares de 527 departamentos. Elegí un servicio y mirá cómo cambia el país.</p>
+      </header>
+
+      <main class="texto">
+        <div id="selector" role="tablist" aria-label="Servicio a mostrar"></div>
+        <p id="nota" class="nota" aria-live="polite"></p>
+        <form id="ubicar" onsubmit="return false">
+          <label for="buscador">Buscá tu departamento</label>
+          <input id="buscador" type="search" list="lista-deptos" autocomplete="off" placeholder="Por ejemplo, Rosario (Santa Fe)">
+          <datalist id="lista-deptos"></datalist>
+          <p id="aviso-busqueda" class="aviso" role="status"></p>
+          <label for="provincia">Acercarte a una provincia</label>
+          <select id="provincia"></select>
+        </form>
+        <aside id="panel" aria-label="Comparación de territorios"></aside>
+        <p id="status" role="status"></p>
+        <footer class="fuente">
+          Fuente: INDEC, Censo Nacional de Población, Hogares y Viviendas 2022. Hogares en viviendas particulares. Muestra una brecha entre territorios, no sus causas.
+        </footer>
+      </main>
+
+      <div class="mapas">
+        <section id="map" aria-label="Mapa de acceso a servicios por departamento"></section>
+        <figure class="amba">
+          <figcaption>AMBA: CABA y 24 partidos del Gran Buenos Aires</figcaption>
+          <div id="map-amba" role="region" aria-label="Mapa ampliado del AMBA"></div>
+        </figure>
+      </div>
+    </div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script type="module" src="js/main.js"></script>
   </body>
 </html>
