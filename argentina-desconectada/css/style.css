@@ -1,0 +1,10 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #172635;
+  background: #f5f7fa;
+}
+
+body { margin: 0; padding: 2rem; }
+main { max-width: 1200px; margin: auto; }
+#map { min-height: 60vh; background: #e5ebf1; border-radius: 0.75rem; }
+#panel { margin-top: 1rem; }
