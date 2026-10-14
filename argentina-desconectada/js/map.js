@@ -1,10 +1,10 @@
 // Cartografía local sobre un estilo vacío, sin mapas base ni tiles externos.
-const RAMPAS = {
-  agua_red: ['#eff3ff', '#bdd7e7', '#6baed6', '#3182bd', '#08519c'],
-  cloacas_red: ['#f2f0f7', '#cbc9e2', '#9e9ac8', '#756bb1', '#54278f'],
-  gas_red: ['#feedde', '#fdbe85', '#fd8d3c', '#e6550d', '#a63603'],
-  internet_vivienda: ['#edf8e9', '#bae4b3', '#74c476', '#31a354', '#006d2c'],
-  resumen: ['#ffffd4', '#fed98e', '#fe9929', '#d95f0e', '#993404'],
+export const RAMPAS = {
+  agua_red: ['#183447', '#245e80', '#318bb8', '#55bce6', '#a1e9ff'],
+  cloacas_red: ['#302743', '#5e467b', '#9264b8', '#bf92e0', '#eed0ff'],
+  gas_red: ['#442c20', '#84502e', '#bd733b', '#eda454', '#ffe09a'],
+  internet_vivienda: ['#183c32', '#286b52', '#389672', '#66c79a', '#b0f7cb'],
+  resumen: ['#3a3021', '#775529', '#b18136', '#e7b750', '#ffe79c'],
 };
 export const SERVICIOS = {
   agua_red: { nombre: 'Agua de red', campo: 'pct_agua_red', hogares: 'hogares_agua_red' },
@@ -14,6 +14,13 @@ export const SERVICIOS = {
 };
 const ESPECIALES = new Set(['94021', '94028']);
 const MAX_ALTURA = 100000; // Metros visuales: escala lineal, sin significado geográfico.
+const ACENTO = '#ff4f91';
+const suavizar = (t) => t * t * (3 - 2 * t);
+export function rangoColor(p, servicio) {
+  if (p.sin_datos || ESPECIALES.has(p.codigo)) return null;
+  const v = servicio === 'resumen' ? p.servicios_bajo_media : p[SERVICIOS[servicio].campo];
+  return v == null ? null : servicio === 'resumen' ? v : Math.min(4, Math.floor(Math.max(0, 100 - v) / 20));
+}
 const collection = (features) => ({ type: 'FeatureCollection', features });
 const vacio = () => ({ version: 8, sources: {}, layers: [{ id: 'fondo', type: 'background', paint: { 'background-color': '#0B0D10' } }] });
 
@@ -43,7 +50,7 @@ export function initMap(container, geojson, opciones = {}) {
   const {
     filtro = null, activo = null, conLeyenda = true, conZoom = true,
     reserva = () => 0, contenedorLeyenda = null, provincias = null, resumen = null,
-    onHover = () => {}, onSeleccion = () => {}, onProvinciaHover = () => {}, onProvincia = () => {},
+    onHover = () => {}, onSeleccion = () => {}, onProvinciaHover = () => {}, onProvincia = () => {}, onFuera = () => {},
   } = opciones;
   if (!container) throw new Error('No se encontró el contenedor del mapa.');
   if (!globalThis.maplibregl) throw new Error('No se pudo cargar MapLibre.');
@@ -66,6 +73,7 @@ export function initMap(container, geojson, opciones = {}) {
   const duration = reduced ? 0 : 650;
   let servicio = 'agua_red', provActual = null, seleccionado = null, listo = false, modo3D = conZoom;
   let frame = 0, visuales = new Map();
+  let dimensionFrame = 0, factorAltura = conZoom ? 1 : 0;
   const host = document.createElement('div');
   host.className = 'mapa-canvas'; container.append(host);
   const map = new maplibregl.Map({ container: host, style: vacio(), center: [-64, -39], zoom: 3,
@@ -81,17 +89,16 @@ export function initMap(container, geojson, opciones = {}) {
     container.append(volver); volver.addEventListener('click', salir);
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
     map.addControl(new maplibregl.FullscreenControl({ container: container.parentElement }), 'top-right');
-    map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: 'INDEC, Censo 2022 · Cartografía INDEC/IGN' }), 'bottom-right');
+    map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: 'Fuente: INDEC, Censo 2022 · Cartografía: INDEC/IGN' }), 'bottom-right');
     const boton = document.createElement('button');
-    boton.type = 'button'; boton.className = 'mapa-dimension'; boton.textContent = '2D';
-    boton.setAttribute('aria-label', 'Cambiar a vista 2D'); boton.setAttribute('aria-pressed', 'false');
+    boton.type = 'button'; boton.className = 'mapa-dimension'; boton.textContent = 'Vista plana';
+    boton.setAttribute('aria-label', 'Cambiar a vista plana'); boton.setAttribute('aria-pressed', 'false');
     container.append(boton);
     boton.addEventListener('click', () => {
-      modo3D = !modo3D; boton.textContent = modo3D ? '2D' : '3D';
-      boton.setAttribute('aria-label', `Cambiar a vista ${modo3D ? '2D' : '3D'}`);
+      modo3D = !modo3D; boton.textContent = modo3D ? 'Vista plana' : 'Vista 3D';
+      boton.setAttribute('aria-label', `Cambiar a ${modo3D ? 'vista plana' : 'vista 3D'}`);
       boton.setAttribute('aria-pressed', String(!modo3D));
-      map.setMaxPitch(modo3D ? 60 : 0);
-      map.easeTo({ pitch: pitch(), bearing: modo3D ? map.getBearing() : 0, duration }); actualizarValores();
+      animarDimension();
     });
   }
   function dibujarLeyenda() {
@@ -105,8 +112,34 @@ export function initMap(container, geojson, opciones = {}) {
     const raw = servicio === 'resumen' ? p.servicios_bajo_media : p[SERVICIOS[servicio].campo];
     if (p.sin_datos || raw == null) return { altura: 0, color: '#b9b9b9' };
     const v = servicio === 'resumen' ? raw : Math.max(0, Math.min(100, 100 - raw));
-    return { altura: modo3D ? v / (servicio === 'resumen' ? 4 : 100) * MAX_ALTURA : 0,
+    return { altura: v / (servicio === 'resumen' ? 4 : 100) * MAX_ALTURA,
       color: RAMPAS[servicio][servicio === 'resumen' ? v : Math.min(4, Math.floor(v / 20))] };
+  }
+  const colorExtrusion = ['case', ['boolean', ['feature-state', 'seleccionado'], false], ACENTO,
+    ['coalesce', ['feature-state', 'color'], '#b9b9b9']];
+  function alturaExtrusion() {
+    return ['*', factorAltura, ['coalesce', ['feature-state', 'altura'], 0],
+      ['case', ['boolean', ['feature-state', 'seleccionado'], false], 1.15, 1]];
+  }
+  function aplicarFactor() {
+    if (!listo) return;
+    for (const id of ['provincia-volumen', 'departamento-volumen', 'departamento-elegido']) {
+      map.setPaintProperty(id, 'fill-extrusion-height', alturaExtrusion());
+    }
+  }
+  // Cámara y altura comparten duración y curva; no se limita el pitch antes de animar.
+  function animarDimension() {
+    cancelAnimationFrame(dimensionFrame);
+    const inicio = factorAltura, fin = modo3D ? 1 : 0, start = performance.now();
+    map.setMaxPitch(60);
+    map.easeTo({ pitch: pitch(), bearing: 0, duration, easing: suavizar });
+    function tick(now) {
+      const t = reduced ? 1 : Math.min(1, (now - start) / duration);
+      factorAltura = inicio + (fin - inicio) * suavizar(t); aplicarFactor();
+      if (t < 1) dimensionFrame = requestAnimationFrame(tick);
+      else if (!modo3D) map.setMaxPitch(0);
+    }
+    dimensionFrame = requestAnimationFrame(tick);
   }
   // Interpolación explícita: las expresiones por entidad no garantizan transiciones de paint.
   function actualizarValores() {
@@ -140,10 +173,15 @@ export function initMap(container, geojson, opciones = {}) {
     if (!listo) return;
     const nacional = conZoom && provActual == null;
     for (const id of ['provincia-base', 'provincia-volumen', 'provincia-borde']) map.setLayoutProperty(id, 'visibility', nacional ? 'visible' : 'none');
-    for (const id of ['departamento-base', 'departamento-volumen', 'departamento-borde']) {
+    const activos = activo ? ['in', ['get', 'codigo'], ['literal', validos.filter(activo).map((f) => f.properties.codigo)]] : ['==', ['get', 'cpr'], provActual || ''];
+    for (const id of ['departamento-base', 'departamento-volumen', 'departamento-borde', 'departamento-elegido']) {
       map.setLayoutProperty(id, 'visibility', nacional ? 'none' : 'visible');
-      map.setFilter(id, activo ? ['in', ['get', 'codigo'], ['literal', validos.filter(activo).map((f) => f.properties.codigo)]] : ['==', ['get', 'cpr'], provActual || '']);
+      const seleccion = ['==', ['get', 'codigo'], seleccionado || ''];
+      map.setFilter(id, id === 'departamento-elegido' ? ['all', activos, seleccion]
+        : id === 'departamento-volumen' ? ['all', activos, ['!', seleccion]] : activos);
     }
+    map.setPaintProperty('departamento-volumen', 'fill-extrusion-opacity', seleccionado ? 0.6 : 1);
+    map.setPaintProperty('departamento-base', 'fill-opacity', ['case', ['boolean', ['feature-state', 'atenuado'], false], 0.6, 1]);
     map.setLayoutProperty('resto', 'visibility', !nacional ? 'visible' : 'none');
     map.setFilter('resto', activo ? ['!', ['in', ['get', 'codigo'], ['literal', validos.filter(activo).map((f) => f.properties.codigo)]]] : ['!=', ['get', 'cpr'], provActual || '']);
     etiquetas.forEach(({ marker }) => { marker.getElement().hidden = !nacional; });
@@ -151,12 +189,12 @@ export function initMap(container, geojson, opciones = {}) {
   }
   function abrir(cpr) {
     if (!provs.some((f) => f.properties.cpr === cpr)) return;
-    provActual = cpr; onProvinciaHover(null); onProvincia(cpr); actualizarNivel();
+    marcar(null); provActual = cpr; onProvinciaHover(null); onProvincia(cpr); actualizarNivel();
     if (listo) fit(validos.filter((f) => f.properties.cpr === cpr));
   }
   function salir() {
     if (!provActual) return;
-    provActual = null; seleccionado = null; onProvinciaHover(null); onProvincia(null); actualizarNivel();
+    marcar(null); provActual = null; onProvinciaHover(null); onProvincia(null); actualizarNivel();
     if (listo) fit(validos);
   }
   const etiquetas = [];
@@ -167,14 +205,18 @@ export function initMap(container, geojson, opciones = {}) {
     map.addSource('sin-datos', { type: 'geojson', data: collection(especiales) });
     map.addLayer({ id: 'resto', type: 'fill', source: activo ? 'deptos' : 'provs', paint: { 'fill-color': ['coalesce', ['feature-state', 'color'], '#b9b9b9'], 'fill-opacity': 0.2 } });
     for (const [prefijo, source] of [['provincia', 'provs'], ['departamento', 'deptos']]) {
-      const color = ['coalesce', ['feature-state', 'color'], '#b9b9b9'];
+      const color = colorExtrusion;
       map.addLayer({ id: `${prefijo}-base`, type: 'fill', source, paint: { 'fill-color': color } });
       map.addLayer({ id: `${prefijo}-volumen`, type: 'fill-extrusion', source, paint: {
-        'fill-extrusion-color': color, 'fill-extrusion-height': ['coalesce', ['feature-state', 'altura'], 0], 'fill-extrusion-opacity': 1 } });
+        'fill-extrusion-color': color, 'fill-extrusion-height': alturaExtrusion(),
+        'fill-extrusion-height-transition': { duration: 0 }, 'fill-extrusion-opacity': 1 } });
       map.addLayer({ id: `${prefijo}-borde`, type: 'line', source, paint: { 'line-color': '#dae1eb', 'line-width': prefijo === 'provincia' ? 1 : 0.5 } });
     }
     map.addLayer({ id: 'sin-censo', type: 'fill', source: 'sin-datos', paint: { 'fill-pattern': 'sin-censo' } });
-    map.addLayer({ id: 'seleccion', type: 'line', source: 'deptos', filter: ['==', ['get', 'codigo'], ''], paint: { 'line-color': '#ff4f91', 'line-width': 3 } });
+    // Misma fuente y coordenadas: la selección conserva el alineamiento en todos los ángulos.
+    map.addLayer({ id: 'departamento-elegido', type: 'fill-extrusion', source: 'deptos', paint: {
+      'fill-extrusion-color': colorExtrusion, 'fill-extrusion-height': alturaExtrusion(),
+      'fill-extrusion-height-transition': { duration: 0 }, 'fill-extrusion-opacity': 1 } });
     if (conZoom) for (const f of provs) {
       const b = bounds(validos.filter((d) => d.properties.cpr === f.properties.cpr));
       const el = document.createElement('button'); el.type = 'button'; el.className = 'etiqueta-prov';
@@ -184,20 +226,23 @@ export function initMap(container, geojson, opciones = {}) {
       etiquetas.push({ marker });
     }
     listo = true; actualizarNivel(); actualizarValores();
-    if (seleccionado) map.setFilter('seleccion', ['==', ['get', 'codigo'], seleccionado]);
+    marcar(seleccionado);
     fit(activo ? validos.filter(activo) : provActual ? validos.filter((f) => f.properties.cpr === provActual) : validos, conZoom ? 7 : 10, false);
   });
   map.on('error', (e) => { const status = document.querySelector('#status'); if (status) status.textContent = `No se pudo dibujar el mapa: ${e.error.message}`; console.error(e.error); });
   function hit(e) {
     if (!listo) return null;
     const nacional = conZoom && !provActual;
-    const layers = nacional ? ['provincia-volumen', 'provincia-base'] : ['departamento-volumen', 'departamento-base'];
+    const layers = nacional ? ['provincia-volumen', 'provincia-base'] : ['departamento-elegido', 'departamento-volumen', 'departamento-base'];
     return map.queryRenderedFeatures(e.point, { layers })[0];
   }
   map.on('click', (e) => {
-    const f = hit(e); if (!f) return;
+    const f = hit(e); if (!f) { onFuera(); return; }
     if (conZoom && !provActual) abrir(f.properties.cpr);
-    else onSeleccion(feats.find((d) => d.properties.codigo === f.properties.codigo).properties);
+    else {
+      const departamento = feats.find((d) => d.properties.codigo === f.properties.codigo);
+      onSeleccion(departamento.properties, anclaDe(departamento));
+    }
   });
   map.on('mousemove', (e) => {
     if (e.originalEvent?.sourceCapabilities?.firesTouchEvents) return;
@@ -225,10 +270,26 @@ export function initMap(container, geojson, opciones = {}) {
     new ResizeObserver(() => mini.resize()).observe(miniHost);
   }
   dibujarLeyenda();
+  function marcar(codigo) {
+    seleccionado = validos.some((f) => f.properties.codigo === codigo) ? codigo : null;
+    if (!listo) return;
+    for (const f of validos) map.setFeatureState({ source: 'deptos', id: f.properties.codigo }, {
+      seleccionado: f.properties.codigo === seleccionado,
+      atenuado: !!seleccionado && f.properties.codigo !== seleccionado && f.properties.cpr === seleccionado.slice(0, 2),
+    });
+    actualizarNivel();
+  }
+  function anclaDe(f) {
+    const b = bounds([f]); return { map, lngLat: [(b[0][0] + b[1][0]) / 2, (b[0][1] + b[1][1]) / 2] };
+  }
   return {
     salir, nivel: () => provActual == null ? 'pais' : 'provincia',
     setServicio(s) { if (s !== 'resumen' && !SERVICIOS[s]) return; servicio = s; actualizarValores(); },
-    marcar(codigo) { seleccionado = codigo; if (listo) map.setFilter('seleccion', ['==', ['get', 'codigo'], codigo || '']); },
+    marcar,
+    ancla(codigo) {
+      const f = validos.find((d) => d.properties.codigo === codigo); if (!f) return null;
+      return anclaDe(f);
+    },
     enfocar(codigo) {
       if (!conZoom) return;
       const f = validos.find((d) => d.properties.codigo === codigo); if (!f) return;

@@ -1,6 +1,6 @@
 // Punto de entrada: carga de datos y armado del mapa.
 import { initMap, SERVICIOS, esAMBA, esPartidoGBA } from './map.js';
-import { initPanel, initTooltip } from './panel.js';
+import { initTarjetas, initTooltip } from './panel.js';
 
 const NOTAS = {
   agua_red: 'Hogares con agua por red pública.',
@@ -22,65 +22,36 @@ async function main() {
   const datosProv = resumen ? resumen.provincias : {};
   const media = resumen ? resumen.media_nacional : null;
 
-  // Seleccionar (clic, toque o búsqueda) deja el departamento fijo: mover el mouse ya no cambia el panel.
-  let fijo = null;
-  const panel = initPanel(document.querySelector('#panel'), geojson, media, soltar, () => mapaPais.salir(), datosProv);
-  const tooltip = initTooltip(document.querySelector('#map'), datosProv, media);
+  const contenedor = document.querySelector('#map');
+  const tooltip = initTooltip(contenedor, geojson, resumen);
+  const tarjetas = initTarjetas(contenedor, resumen, () => marcarEnMapas(null));
   function marcarEnMapas(codigo) {
     mapaPais.marcar(codigo);
     mapaAmba.marcar(codigo);
   }
-  function seleccionar(p) {
-    conAnclaje(() => {
-      fijo = p;
-      panel.mostrar(p, true);
-      marcarEnMapas(p.codigo);
-    });
+  function seleccionar(p, ancla = mapaPais.ancla(p.codigo)) {
+    tooltip.ocultar();
+    if (tarjetas.mostrar(p, ancla) !== false) marcarEnMapas(p.codigo);
   }
-  function soltar() {
-    fijo = null;
-    panel.mostrar(null);
-    marcarEnMapas(null);
-  }
-  // En celular el panel está arriba del mapa: si cambia de alto, se corrige el scroll para que el mapa no se mueva.
-  function conAnclaje(cambio) {
-    const mapaEl = document.querySelector('#map');
-    const antes = mapaEl.getBoundingClientRect().top;
-    cambio();
-    const dif = mapaEl.getBoundingClientRect().top - antes;
-    if (dif) window.scrollBy(0, dif);
-  }
-  const onHover = (p) => {
-    if (!fijo) panel.mostrar(p);
-  };
-  const onSeleccion = seleccionar;
-  // En pantallas anchas el recuadro del AMBA va encima del mapa, a la izquierda: se le reserva ese lugar.
   const recuadroAmba = document.querySelector('.amba');
   const reservaAmba = () => (!recuadroAmba.hidden && getComputedStyle(recuadroAmba).position === 'absolute' ? recuadroAmba.offsetWidth + 16 : 0);
   const selProv = document.querySelector('#provincia');
-  // Se abre (cpr) o se cierra (null) una provincia: el panel pasa a mostrar su resumen.
   function onProvincia(cpr) {
-    conAnclaje(() => cambiarProvincia(cpr));
-  }
-  function cambiarProvincia(cpr) {
-    fijo = null;
-    panel.mostrar(null);
-    marcarEnMapas(null);
-    panel.mostrarProvincia(cpr);
+    tarjetas.cambiarProvincia();
     tooltip.ocultar();
-    recuadroAmba.hidden = cpr !== '06'; // la lupa del conurbano solo va en la vista de Buenos Aires
+    recuadroAmba.hidden = cpr !== '06';
     selProv.value = cpr && datosProv[cpr] ? datosProv[cpr].nombre : '';
   }
-  const mapaPais = initMap(document.querySelector('#map'), geojson, { provincias, resumen, reserva: reservaAmba, contenedorLeyenda: document.querySelector('#leyenda-mapa'), onHover, onSeleccion, onProvincia, onProvinciaHover: tooltip.mostrar });
-  const mapaAmba = initMap(document.querySelector('#map-amba'), geojson, { filtro: esAMBA, activo: esPartidoGBA, conLeyenda: false, conZoom: false, provincias, onHover, onSeleccion });
+  const mapaPais = initMap(contenedor, geojson, { provincias, resumen, reserva: reservaAmba, contenedorLeyenda: document.querySelector('#leyenda-mapa'), onSeleccion: seleccionar, onProvincia, onProvinciaHover: tooltip.mostrar, onFuera: tarjetas.cerrarPorMapa });
+  const mapaAmba = initMap(document.querySelector('#map-amba'), geojson, { filtro: esAMBA, activo: esPartidoGBA, conLeyenda: false, conZoom: false, provincias, onSeleccion: (p) => seleccionar(p), onFuera: tarjetas.cerrarPorMapa });
   const mapa = {
     setServicio(s) {
       mapaPais.setServicio(s);
       mapaAmba.setServicio(s);
-      panel.setServicio(s);
+      tarjetas.setServicio(s);
+      tooltip.setServicio(s);
     },
   };
-
   // Buscador de departamento y zoom por provincia
   const nombres = geojson.features.filter((f) => !f.properties.sin_datos).map((f) => f.properties);
   const etiquetaDe = (p) => `${p.territorio} (${p.provincia})`;
@@ -109,7 +80,7 @@ async function main() {
   });
   selProv.addEventListener('change', () => mapaPais.entrarProvincia(selProv.value));
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') mapaPais.salir();
+    if (e.key === 'Escape' && !tarjetas.escape()) mapaPais.salir();
   });
 
   const opciones = {

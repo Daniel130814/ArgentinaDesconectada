@@ -1,196 +1,153 @@
-// Panel fijo: datos del departamento bajo el cursor y comparación de dos departamentos lado a lado.
-import { SERVICIOS } from './map.js';
+// Tarjetas de territorio, fuentes y comparación sobre el mapa.
+import { SERVICIOS, RAMPAS, rangoColor } from './map.js';
 
 const miles = new Intl.NumberFormat('es-AR');
-const coma = (n, d = 1) => n.toFixed(d).replace('.', ',');
-const pct = (v) => `${coma(v)}%`;
-const pp = (v) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${coma(Math.abs(v))} pp`;
+const pct = (v) => `${v.toFixed(1).replace('.', ',')}%`;
+const escapar = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const FUENTES = {
+  agua_red: ['H14', 'Hogares con agua por red pública.'],
+  cloacas_red: ['H18', 'Hogares con desagüe a red pública (cloacas).'],
+  gas_red: ['H19', 'Hogares que cocinan principalmente con gas de red. No mide si la red existe en la zona.'],
+  internet_vivienda: ['H24A', 'Hogares con conexión a internet en la vivienda (no celular). No mide velocidad ni calidad.'],
+};
 
-// Media provincial = suma de hogares con el servicio / suma de hogares, nunca promedio de porcentajes.
-function mediasProvinciales(geojson) {
-  const acum = {};
-  for (const { properties: p } of geojson.features) {
-    if (p.sin_datos) continue;
-    const a = (acum[p.provincia] ??= { total: 0 });
-    a.total += p.hogares_total;
-    for (const [k, s] of Object.entries(SERVICIOS)) a[k] = (a[k] ?? 0) + p[s.hogares];
-  }
-  const medias = {};
-  for (const [prov, a] of Object.entries(acum)) {
-    medias[prov] = Object.fromEntries(Object.keys(SERVICIOS).map((k) => [k, (100 * a[k]) / a.total]));
-  }
-  return medias;
+export function htmlDepartamento(p, servicio, resumen, comparar = null, fuenteAbierta = false) {
+  const media = resumen.media_nacional;
+  const prov = resumen.provincias[p.codigo.slice(0, 2)];
+  const barras = Object.entries(SERVICIOS).map(([k, s]) => {
+    const valor = p[s.campo];
+    return `<div class="servicio-barra${k === servicio ? ' activa' : ''}">
+      <div class="barra-titulo"><strong>${s.nombre}</strong><strong>${pct(valor)} con servicio</strong></div>
+      <div class="barra-pista" role="img" aria-label="${s.nombre}: ${pct(valor)} con servicio; media nacional ${pct(media[k])}">
+        <span class="barra-valor" style="width:${valor}%;background:${RAMPAS[k][3]}"></span>
+        <span class="barra-media" style="left:${media[k]}%" title="Media nacional: ${pct(media[k])}"></span>
+      </div>
+      <span>${miles.format(p[s.hogares])} de ${miles.format(p.hogares_total)} hogares</span>
+      <small>Nación ${pct(media[k])}${prov ? ` · Provincia ${pct(prov[k])}` : ''}</small>
+    </div>`;
+  }).join('');
+  const comparacion = comparar && comparar.codigo !== p.codigo ? `<section class="comparacion"><h3>Comparación con ${escapar(comparar.territorio)}</h3><p>${escapar(comparar.provincia)}</p>
+    <table><caption>Acceso al servicio; diferencia del departamento elegido respecto del anterior.</caption><thead><tr><th>Servicio</th><th>${escapar(p.territorio)}</th><th>${escapar(comparar.territorio)}</th><th>Dif.</th></tr></thead>
+    <tbody>${Object.entries(SERVICIOS).map(([k, s]) => {
+      const dif = p[s.campo] - comparar[s.campo];
+      return `<tr class="${k === servicio ? 'activa' : ''}"><th>${s.nombre}</th><td>${pct(p[s.campo])}<small>${miles.format(p[s.hogares])} hogares</small></td><td>${pct(comparar[s.campo])}<small>${miles.format(comparar[s.hogares])} hogares</small></td><td>${dif > 0 ? '+' : ''}${dif.toFixed(1).replace('.', ',')} pp</td></tr>`;
+    }).join('')}</tbody></table><p>pp: puntos porcentuales. Cada porcentaje corresponde a los hogares de su departamento.</p></section>` : '';
+  return `<div class="tarjeta-encabezado"><div><h2>${escapar(p.territorio)}</h2><p>${escapar(p.provincia)}</p></div>
+    <button type="button" class="tarjeta-cerrar" data-accion="cerrar" aria-label="Cerrar tarjeta">×</button></div>
+    <p class="tarjeta-hogares"><strong>${miles.format(p.hogares_total)}</strong> hogares totales</p>
+    <div class="barras-servicios">${barras}</div><p class="referencia-media"><i></i> Marca vertical: media nacional</p>
+    <p class="indice">Bajo la media nacional en ${p.servicios_bajo_media} de 4 servicios. Clasifica departamentos, no hogares.</p>
+    <div class="tarjeta-acciones"><button type="button" data-accion="fuente" aria-expanded="${fuenteAbierta}">Fuente</button><button type="button" data-accion="comparar">Comparar con otro</button></div>
+    <div class="tarjeta-fuente"${fuenteAbierta ? '' : ' hidden'}><strong>INDEC · Censo 2022</strong><p>Hogares en viviendas particulares. Porcentaje = hogares con servicio / hogares totales × 100.</p>
+      ${Object.entries(SERVICIOS).map(([k, s]) => `<p><b>${s.nombre} · ${FUENTES[k][0]}</b>: ${FUENTES[k][1]}</p>`).join('')}
+      <p>Cartografía: INDEC/IGN.</p></div>${comparacion}`;
 }
 
-// Una fila por servicio con el porcentaje y la cantidad de hogares de una provincia.
-function filasProvincia(d, mediaNacional, activa = null) {
-  return Object.entries(SERVICIOS)
-    .map(([k, s]) => `<div class="fila${k === activa ? ' activa' : ''}">
-      <dt>${s.nombre}</dt>
-      <dd><strong>${pct(d[k])}</strong> <span class="hogares">${miles.format(d[s.hogares])} de ${miles.format(d.hogares_total)} hogares</span>
-      ${mediaNacional ? `<span class="medias">Nación ${pct(mediaNacional[k])}</span>` : ''}</dd>
-    </div>`)
-    .join('');
+export function htmlProvincia(cpr, servicio, geojson, resumen) {
+  const d = resumen.provincias[cpr];
+  if (!d) return '';
+  const departamentos = geojson.features.filter((f) => !f.properties.sin_datos && !['94021', '94028'].includes(f.properties.codigo) && f.properties.codigo.startsWith(cpr));
+  const rangos = [0, 0, 0, 0, 0];
+  departamentos.forEach((f) => { const r = rangoColor(f.properties, servicio); if (r != null) rangos[r]++; });
+  const valor = servicio === 'resumen'
+    ? `<p><strong>${Object.entries(SERVICIOS).filter(([k, s]) => 100 * d[s.hogares] / d.hogares_total < resumen.media_nacional[k]).length} de 4</strong> servicios bajo la media nacional en la provincia.</p>`
+    : `<p><strong>${pct(d[servicio])}</strong> con ${SERVICIOS[servicio].nombre.toLowerCase()}<br>${miles.format(d[SERVICIOS[servicio].hogares])} de ${miles.format(d.hogares_total)} hogares</p>`;
+  return `<strong class="tooltip-nombre">${escapar(d.nombre)}</strong><p>${departamentos.length} departamentos con datos censales</p>${valor}
+    <p class="distribucion-titulo">Departamentos por ${servicio === 'resumen' ? 'servicios bajo la media (0–4)' : '% de hogares sin servicio'}</p>
+    <div class="distribucion">${rangos.map((n, i) => `<div><i style="background:${RAMPAS[servicio][i]}"></i><span>${servicio === 'resumen' ? i : `${i * 20}–${(i + 1) * 20}%`}</span><strong>${n}</strong></div>`).join('')}</div>
+    <p class="tooltip-entrar">TOCÁ PARA ENTRAR</p>`;
 }
 
-// Tooltip con el resumen provincial al pasar el mouse por una provincia (vista nacional).
-export function initTooltip(contenedor, provincias, mediaNacional) {
-  const el = document.createElement('div');
-  el.className = 'tooltip-prov';
-  el.hidden = true;
+export function initTooltip(contenedor, geojson, resumen) {
+  const el = document.createElement('div'); el.className = 'tooltip-prov'; el.hidden = true;
   contenedor.append(el);
-  let codigo = null;
+  let codigo = null, servicio = 'agua_red';
   return {
     mostrar(cpr, evento) {
-      const d = cpr && provincias[cpr];
-      if (!d) {
-        el.hidden = true;
-        codigo = null;
-        return;
-      }
-      if (codigo !== cpr) {
-        el.innerHTML = `<strong>${d.nombre}</strong><dl>${filasProvincia(d, mediaNacional)}</dl><p>Clic para ver sus departamentos</p>`;
-        codigo = cpr;
-      }
+      if (!cpr || !resumen.provincias[cpr] || !evento || evento.pointerType === 'touch') { el.hidden = true; codigo = null; return; }
+      if (codigo !== cpr) { el.innerHTML = htmlProvincia(cpr, servicio, geojson, resumen); codigo = cpr; }
       el.hidden = false;
       const r = contenedor.getBoundingClientRect();
-      let x = evento.clientX - r.left + 16;
-      let y = evento.clientY - r.top + 16;
-      if (x + el.offsetWidth > r.width - 8) x = evento.clientX - r.left - el.offsetWidth - 16;
+      let x = evento.clientX - r.left + 18, y = evento.clientY - r.top + 18;
+      if (x + el.offsetWidth > r.width - 8) x = evento.clientX - r.left - el.offsetWidth - 18;
       if (y + el.offsetHeight > r.height - 8) y = r.height - el.offsetHeight - 8;
       el.style.transform = `translate(${Math.max(8, x)}px, ${Math.max(8, y)}px)`;
     },
-    ocultar() {
-      el.hidden = true;
-      codigo = null;
-    },
+    ocultar() { el.hidden = true; codigo = null; },
+    setServicio(s) { servicio = s; if (codigo) el.innerHTML = htmlProvincia(codigo, servicio, geojson, resumen); },
   };
 }
 
-export function initPanel(container, geojson, mediaNacional, onSoltar = () => {}, onVolver = () => {}, resumenProvincias = {}) {
-  if (!container) throw new Error('No se encontró el contenedor del panel.');
-  const provinciales = mediasProvinciales(geojson);
-  let servicio = 'agua_red';
-  let actual = null;
-  let provincia = null; // código de la provincia abierta en el mapa (null = vista nacional)
-  let fijo = false; // el departamento mostrado está seleccionado y no cambia al mover el mouse
-  let fijados = []; // hasta dos departamentos, el más antiguo primero
-
-  container.innerHTML = '<div class="vivo"></div><div class="comparacion"></div>';
-  const vivo = container.querySelector('.vivo');
-  const comparacion = container.querySelector('.comparacion');
-
-  const estaFijado = (p) => fijados.some((f) => f.codigo === p.codigo);
-
-  function fila(clave, p) {
-    const s = SERVICIOS[clave];
-    const nacional = mediaNacional ? `Nación ${pct(mediaNacional[clave])}` : '';
-    const prov = provinciales[p.provincia] ? `, provincia ${pct(provinciales[p.provincia][clave])}` : '';
-    return `<div class="fila${clave === servicio ? ' activa' : ''}">
-      <dt>${s.nombre}</dt>
-      <dd><strong>${pct(p[s.campo])}</strong> <span class="hogares">${miles.format(p[s.hogares])} de ${miles.format(p.hogares_total)} hogares</span>
-      <span class="medias">${nacional}${prov}</span></dd>
-    </div>`;
+export function initTarjetas(contenedor, resumen, onCerrar) {
+  const card = document.createElement('article'); card.className = 'tarjeta-depto'; card.hidden = true;
+  card.setAttribute('role', 'dialog'); card.setAttribute('aria-label', 'Datos del departamento'); card.tabIndex = -1;
+  const aviso = document.createElement('div'); aviso.className = 'aviso-comparacion'; aviso.hidden = true; aviso.setAttribute('role', 'status');
+  contenedor.append(card, aviso);
+  const media = window.matchMedia('(max-width: 767px)');
+  let actual = null, servicio = 'agua_red', ancla = null, popup = null, comparar = null, esperando = false, fuenteAbierta = false;
+  let mapaAncla = null, posicionPopup = null;
+  function ajustar() {
+    if (!popup || !ancla) return;
+    const punto = ancla.map.project(ancla.lngLat);
+    const alto = ancla.map.getContainer().clientHeight;
+    const disponible = posicionPopup === 'left' || posicionPopup === 'right'
+      ? 2 * Math.min(punto.y - 85, alto - punto.y - 35)
+      : Math.max(punto.y - 90, alto - punto.y - 45);
+    card.style.maxHeight = `${Math.max(120, Math.min(640, disponible - 20))}px`;
+    popup.setLngLat(ancla.lngLat);
   }
-
-  function renderVivo() {
-    if (!actual && provincia && resumenProvincias[provincia]) {
-      const d = resumenProvincias[provincia];
-      vivo.innerHTML = `<div class="encabezado"><div><h2>${d.nombre}</h2><p class="prov">Provincia, ${miles.format(d.hogares_total)} hogares</p></div>
-        <div class="acciones"><button type="button" data-accion="volver">← Argentina</button></div></div>
-        <dl>${filasProvincia(d, mediaNacional, servicio)}</dl>
-        <p class="indice">Pasá el mouse por un departamento para ver sus datos. Hacé clic o tocá para dejarlo fijo.</p>`;
-      return;
-    }
-    if (!actual) {
-      vivo.innerHTML = '<p class="vacio">Pasá el mouse por una provincia para ver su resumen. Hacé clic o tocá para acercarte y ver sus departamentos.</p>';
-      return;
-    }
-    if (actual.sin_datos) {
-      vivo.innerHTML = '<p class="vacio"><strong>Sin datos.</strong> Este territorio no tiene información en el Censo 2022.</p>';
-      return;
-    }
-    const p = actual;
-    const fijado = estaFijado(p);
-    vivo.innerHTML = `<div class="encabezado"><div><h2>${p.territorio}</h2><p class="prov">${p.provincia}</p></div>
-      <div class="acciones"><button type="button" class="fijar" data-accion="fijar"${fijado ? ' disabled' : ''}>${fijado ? 'En la comparación' : 'Comparar'}</button>
-      ${fijo ? '<button type="button" data-accion="soltar">Quitar selección</button>' : ''}</div></div>
-      <dl>${Object.keys(SERVICIOS).map((k) => fila(k, p)).join('')}</dl>
-      <p class="indice">Está bajo la media nacional en ${p.servicios_bajo_media} de 4 servicios (clasifica departamentos, no hogares).</p>`;
+  function desmontar() {
+    if (mapaAncla) { mapaAncla.off('move', ajustar); mapaAncla.off('resize', ajustar); mapaAncla = null; }
+    popup?.remove(); popup = null;
   }
-
-  function renderComparacion() {
-    if (!fijados.length) {
-      comparacion.innerHTML = '';
-      return;
+  function colocar() {
+    if (!actual || !ancla) return;
+    desmontar(); card.style.maxHeight = '';
+    card.classList.toggle('bottom-sheet', media.matches);
+    if (media.matches) contenedor.append(card);
+    else {
+      const punto = ancla.map.project(ancla.lngLat), ancho = ancla.map.getContainer().clientWidth;
+      posicionPopup = ancho - punto.x > 414 ? 'left' : punto.x > 414 ? 'right' : undefined;
+      popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, focusAfterOpen: false, maxWidth: '390px', className: 'popup-depto', offset: 14, anchor: posicionPopup })
+        .setLngLat(ancla.lngLat).setDOMContent(card).addTo(ancla.map);
+      mapaAncla = ancla.map; mapaAncla.on('move', ajustar); mapaAncla.on('resize', ajustar); ajustar();
     }
-    const [a, b] = fijados;
-    const quitar = (i) => `<button type="button" class="quitar" data-accion="quitar" data-i="${i}" aria-label="Quitar ${fijados[i].territorio} de la comparación">Quitar</button>`;
-    if (!b) {
-      comparacion.innerHTML = `<h3>Comparación</h3>
-        <p class="vacio"><strong>${a.territorio}</strong> (${a.provincia}) ${quitar(0)}<br>Elegí otro departamento en el mapa y tocá Comparar.</p>`;
-      return;
-    }
-    const filas = Object.entries(SERVICIOS)
-      .map(([k, s]) => {
-        const d = a[s.campo] - b[s.campo];
-        return `<tr class="${k === servicio ? 'activa' : ''}">
-          <th scope="row">${s.nombre}</th>
-          <td><strong>${pct(a[s.campo])}</strong><span>${miles.format(a[s.hogares])} de ${miles.format(a.hogares_total)} hogares</span></td>
-          <td><strong>${pct(b[s.campo])}</strong><span>${miles.format(b[s.hogares])} de ${miles.format(b.hogares_total)} hogares</span></td>
-          <td class="dif">${pp(d)}</td></tr>`;
-      })
-      .join('');
-    comparacion.innerHTML = `<h3>Comparación</h3>
-      <table>
-        <thead><tr><td></td>
-          <th scope="col">${a.territorio}<span>${a.provincia}</span>${quitar(0)}</th>
-          <th scope="col">${b.territorio}<span>${b.provincia}</span>${quitar(1)}</th>
-          <th scope="col">Diferencia<span>primero menos segundo</span></th></tr></thead>
-        <tbody>${filas}</tbody>
-      </table>
-      <p class="indice">pp: puntos porcentuales. Cada porcentaje es de los hogares de ese departamento.</p>`;
   }
-
-  function render() {
-    renderVivo();
-    renderComparacion();
+  function render() { if (actual) { card.innerHTML = htmlDepartamento(actual, servicio, resumen, comparar, fuenteAbierta); ajustar(); } }
+  function cerrar(cancelarComparacion = true) {
+    actual = null; card.hidden = true; desmontar();
+    if (cancelarComparacion) { comparar = null; esperando = false; aviso.hidden = true; }
+    onCerrar();
   }
-
-  container.addEventListener('click', (e) => {
-    const boton = e.target.closest('button[data-accion]');
-    if (!boton) return;
-    if (boton.dataset.accion === 'soltar') {
-      onSoltar();
-      return;
+  card.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const b = e.target.closest('button[data-accion]'); if (!b) return;
+    if (b.dataset.accion === 'cerrar') cerrar();
+    if (b.dataset.accion === 'fuente') { fuenteAbierta = !fuenteAbierta; render(); }
+    if (b.dataset.accion === 'comparar') {
+      comparar = actual; esperando = true; fuenteAbierta = false;
+      aviso.innerHTML = `<span>Elegí otro departamento para comparar con ${escapar(actual.territorio)}. Podés cambiar de provincia o usar el buscador.</span><button type="button">Cancelar</button>`;
+      aviso.hidden = false; cerrar(false);
     }
-    if (boton.dataset.accion === 'volver') {
-      onVolver();
-      return;
-    }
-    if (boton.dataset.accion === 'fijar' && actual && !actual.sin_datos && !estaFijado(actual)) {
-      fijados = [...fijados, actual].slice(-2);
-    } else if (boton.dataset.accion === 'quitar') {
-      fijados.splice(Number(boton.dataset.i), 1);
-    }
-    render();
   });
-
-  render();
+  aviso.addEventListener('click', (e) => { if (e.target.closest('button')) cerrar(); });
+  document.addEventListener('click', (e) => {
+    if (!actual || card.contains(e.target) || e.target.closest('.mapa-canvas, .etiqueta-prov, #buscador, #lista-deptos, #selector, .mapa-dimension')) return;
+    cerrar();
+  });
+  media.addEventListener('change', colocar);
   return {
-    mostrar(p, esFijo = false) {
-      actual = p;
-      fijo = esFijo;
-      renderVivo();
+    mostrar(p, ubicacion) {
+      if (p.sin_datos || ['94021', '94028'].includes(p.codigo)) return;
+      if (!esperando) comparar = null;
+      else if (comparar?.codigo === p.codigo) return false;
+      esperando = false; aviso.hidden = true; actual = p; ancla = ubicacion; fuenteAbierta = false;
+      render(); card.hidden = false; colocar(); card.focus({ preventScroll: true });
     },
-    // Provincia abierta en el mapa: con ningún departamento elegido, el panel muestra su resumen.
-    mostrarProvincia(cpr) {
-      provincia = cpr;
-      renderVivo();
-    },
-    setServicio(s) {
-      servicio = s;
-      render();
-    },
+    cerrar,
+    cerrarPorMapa() { if (actual) cerrar(); },
+    cambiarProvincia() { cerrar(!esperando); },
+    escape() { if (!actual && !esperando) return false; cerrar(); return true; },
+    setServicio(s) { servicio = s; render(); },
   };
 }
