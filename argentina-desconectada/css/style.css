@@ -7,7 +7,7 @@ button { cursor:pointer; }
 button:focus-visible,input:focus-visible,select:focus-visible,.tarjeta-depto:focus-visible { outline:3px solid var(--acento); outline-offset:3px; }
 /* Mapa a pantalla completa y bloque de navegación superpuesto. */
 .pagina { position:relative; min-height:100vh; min-height:100dvh; }
-.introduccion { position:absolute; z-index:5; top:24px; left:24px; width:340px; max-height:calc(100dvh - 210px); overflow-y:auto; padding:20px; border:1px solid #394352; border-radius:16px; background:rgba(16,21,28,.91); backdrop-filter:blur(12px); box-shadow:0 12px 40px #0005; }
+.introduccion { position:absolute; z-index:5; top:24px; left:24px; width:340px; max-height:calc(100dvh - 330px); overflow-y:auto; padding:20px; border:1px solid #394352; border-radius:16px; background:rgba(16,21,28,.91); backdrop-filter:blur(12px); box-shadow:0 12px 40px #0005; }
 .texto { padding:0; }
 h1 { margin:0 0 .65rem; font-size:clamp(1.8rem,2.5vw,2.2rem); line-height:1.07; font-weight:800; text-wrap:balance; }
 .bajada { margin:0 0 .8rem; font-size:.95rem; line-height:1.35; color:var(--tinta-suave); }
@@ -43,8 +43,9 @@ h1 { margin:0 0 .65rem; font-size:clamp(1.8rem,2.5vw,2.2rem); line-height:1.07; 
 .leyenda-gradiente { height:13px; border-radius:3px; border:1px solid #647084; }
 .leyenda-marcas { display:flex; justify-content:space-between; margin:.15rem 0 .55rem; font-size:.72rem; }
 .leyenda-marcas span::before { content:''; display:block; width:1px; height:5px; background:#aeb8c5; margin:0 auto 3px; }
-.leyenda-categorias { display:flex; justify-content:space-between; margin-bottom:.5rem; }
-.leyenda-categorias > div { display:flex; flex-direction:column; align-items:center; }
+.leyenda-aclaracion { margin:0 0 .45rem; color:var(--tinta-suave); font-size:.75rem; line-height:1.3; }
+.leyenda-categorias { display:flex; flex-direction:column; gap:.2rem; margin-bottom:.5rem; }
+.leyenda-categorias > div { display:flex; align-items:center; }
 .leyenda .sin-censo { background:repeating-linear-gradient(135deg,#b9b9b9 0 4px,#6e6e6e 4px 6px); }
 .territorios-sin-censo { position:absolute; bottom:28px; right:56px; width:190px; z-index:2; border:1px solid #6e6e6e; border-radius:8px; overflow:hidden; background:#0b0d10; color:#ddd; }
 .territorios-sin-censo > span { display:block; padding:6px 8px; font-size:.72rem; line-height:1.2; }

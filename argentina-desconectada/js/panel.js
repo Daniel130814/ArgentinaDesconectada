@@ -1,5 +1,5 @@
 // Tarjetas de territorio, fuentes y comparación sobre el mapa.
-import { SERVICIOS, RAMPAS, rangoColor, nombreProvincia } from './map.js';
+import { SERVICIOS, RAMPAS, rangoColor, nombreProvincia, alturasProvinciales } from './map.js';
 
 const miles = new Intl.NumberFormat('es-AR');
 const pct = (v) => `${v.toFixed(1).replace('.', ',')}%`;
@@ -50,7 +50,7 @@ export function htmlProvincia(cpr, servicio, geojson, resumen) {
   const rangos = [0, 0, 0, 0, 0];
   departamentos.forEach((f) => { const r = rangoColor(f.properties, servicio); if (r != null) rangos[r]++; });
   const valor = servicio === 'resumen'
-    ? `<p><strong>${Object.entries(SERVICIOS).filter(([k, s]) => 100 * d[s.hogares] / d.hogares_total < resumen.media_nacional[k]).length} de 4</strong> servicios bajo la media nacional en la provincia.</p>`
+    ? `<p><strong>${alturasProvinciales(geojson, resumen)[cpr].servicios_bajo_media_ponderado.toFixed(2).replace('.', ',')} de 4</strong> servicios bajo la media nacional.<br>Altura: media ponderada por hogares de los índices departamentales; clasifica territorios.</p>`
     : `<p><strong>${pct(d[servicio])}</strong> con ${SERVICIOS[servicio].nombre.toLowerCase()}<br>${miles.format(d[SERVICIOS[servicio].hogares])} de ${miles.format(d.hogares_total)} hogares</p>`;
   return `<strong class="tooltip-nombre">${escapar(nombreProvincia(d.nombre))}</strong><p>${departamentos.length} departamentos con datos censales</p>${valor}
     <p class="distribucion-titulo">Departamentos por ${servicio === 'resumen' ? 'servicios bajo la media (0–4)' : '% de hogares sin servicio'}</p>

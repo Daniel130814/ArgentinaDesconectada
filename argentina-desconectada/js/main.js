@@ -43,7 +43,7 @@ async function main() {
     selProv.value = cpr && datosProv[cpr] ? nombreProvincia(datosProv[cpr].nombre) : '';
   }
   const mapaPais = initMap(contenedor, geojson, { provincias, resumen, reserva: reservaAmba, contenedorLeyenda: document.querySelector('#leyenda-mapa'), onSeleccion: seleccionar, onProvincia, onProvinciaHover: tooltip.mostrar, onFuera: tarjetas.cerrarPorMapa });
-  const mapaAmba = initMap(document.querySelector('#map-amba'), geojson, { filtro: esAMBA, activo: esPartidoGBA, conLeyenda: false, conZoom: false, provincias, onSeleccion: (p) => seleccionar(p), onFuera: tarjetas.cerrarPorMapa });
+  const mapaAmba = initMap(document.querySelector('#map-amba'), geojson, { filtro: esAMBA, activo: esPartidoGBA, conLeyenda: false, conZoom: false, provincias, resumen, onSeleccion: (p) => seleccionar(p), onFuera: tarjetas.cerrarPorMapa });
   const mapa = {
     setServicio(s) {
       mapaPais.setServicio(s);
