@@ -9,13 +9,62 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css">
+    <script>document.documentElement.classList.add("js")</script>
     <link rel="stylesheet" href="css/style.css">
   </head>
   <body>
-    <div class="pagina">
+    <div class="home" id="home">
+      <section class="pantalla" aria-labelledby="home-titulo">
+        <div class="cartel-home">
+          <h1 id="home-titulo">Dónde vivís define a qué redes estás conectado</h1>
+          <div class="eje" aria-hidden="true"></div>
+          <ul class="contadores" aria-label="Alcance de los datos">
+            <li><strong data-contador="hogares" data-decimales="1">0</strong> <span>millones de hogares</span></li>
+            <li><strong data-contador="departamentos">0</strong> <span>departamentos</span></li>
+            <li><strong data-contador="servicios">0</strong> <span>servicios</span></li>
+          </ul>
+        </div>
+        <p class="pie-pantalla">Fuente: INDEC, Censo 2022. Extremos entre departamentos con al menos 1.000 hogares</p>
+      </section>
+      <section class="pantalla" aria-label="Internet en la vivienda">
+        <div class="cartel-home">
+          <p class="frase" id="home-internet"></p>
+          <div class="eje" aria-hidden="true"></div>
+          <div class="hb-barras" id="home-internet-barras"></div>
+        </div>
+        <p class="pie-pantalla">Fuente: INDEC, Censo 2022. Extremos entre departamentos con al menos 1.000 hogares</p>
+      </section>
+      <section class="pantalla" aria-label="Cloacas">
+        <div class="cartel-home">
+          <p class="frase" id="home-cloacas-total"></p>
+          <div class="eje" aria-hidden="true"></div>
+          <p class="frase" id="home-cloacas-extremo"></p>
+        </div>
+        <p class="pie-pantalla">Fuente: INDEC, Censo 2022. Extremos entre departamentos con al menos 1.000 hogares</p>
+      </section>
+      <section class="pantalla" aria-label="Gas de red">
+        <div class="cartel-home">
+          <p class="frase">En Formosa, Chaco, Corrientes y Misiones, menos de 3 de cada 100 hogares cocinan con gas de red. En la Patagonia, la mayoría supera los 80.</p>
+          <div class="eje" aria-hidden="true"></div>
+          <div class="hb-barras" id="home-gas-barras"></div>
+          <p class="nota-home">No es solo una brecha entre hogares: la red de gas natural casi no llega al NEA.</p>
+        </div>
+        <p class="pie-pantalla">Fuente: INDEC, Censo 2022. Extremos entre departamentos con al menos 1.000 hogares</p>
+      </section>
+      <section class="pantalla" aria-label="Departamentos por debajo de la media">
+        <div class="cartel-home">
+          <p class="frase" id="home-cuatro"></p>
+          <div class="eje" aria-hidden="true"></div>
+          <button type="button" class="boton-mapa" data-ir-mapa>Explorá el mapa →</button>
+        </div>
+        <p class="pie-pantalla">Fuente: INDEC, Censo 2022. Extremos entre departamentos con al menos 1.000 hogares</p>
+      </section>
+    </div>
+    <button type="button" class="saltar-mapa" id="saltar-mapa" data-ir-mapa>Saltar al mapa</button>
+    <div class="pagina" id="mapa">
       <div class="introduccion">
       <header class="texto">
-        <h1>Dónde vivís define a qué redes estás conectado</h1>
+        <h2 class="titulo-intro">Dónde vivís define a qué redes estás conectado</h2>
         <p class="bajada">Agua, cloacas, gas e internet en los hogares de 527 departamentos. Elegí un servicio y mirá cómo cambia el país.</p>
       </header>
 
@@ -38,6 +87,7 @@
 
       <div class="mapas">
         <nav class="barra-vistas" aria-label="Vistas de la exploración">
+          <button type="button" id="vista-inicio"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V5 M5 11l7-7 7 7"/></svg>Inicio</button>
           <button type="button" id="vista-mapa" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3Z M9 3v15 M15 6v15"/></svg>Mapa</button>
           <button type="button" id="vista-comparar" aria-haspopup="dialog" aria-controls="modal-comparar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="8" cy="7" r="3"/><circle cx="16" cy="17" r="3"/></svg>Comparar</button>
           <button type="button" id="vista-metodologia" aria-haspopup="dialog" aria-controls="modal-metodologia"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v15H5Z M8 9h8 M8 13h8 M8 17h5"/></svg>Metodología</button>
@@ -76,6 +126,7 @@
       </dialog>
     </div>
     <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
+    <script>if (location.hash.length > 1) { history.scrollRestoration = "manual"; document.getElementById("mapa").scrollIntoView({ behavior: "instant" }); }</script>
     <script type="module" src="js/main.js"></script>
   </body>
 </html>

@@ -13,6 +13,7 @@ Entradas:
 Salidas:
     data/processed/departamentos_servicios.geojson
     data/processed/provincias.geojson, pais.geojson
+    data/processed/bordes_provincias.geojson, bordes_departamentos.geojson
     data/processed/resumen_nacional.json
 """
 import json
@@ -109,6 +110,45 @@ pais["geometry"] = pais.geometry.simplify(TOLERANCIA_SIMPLIFICACION, preserve_to
 sal_pais = OUT / "pais.geojson"
 pais.to_file(sal_pais, driver="GeoJSON", COORDINATE_PRECISION=4)
 print(f"OK → {sal_pais} ({sal_pais.stat().st_size / 1e6:.2f} MB)")
+
+# ---------------------------------------------------------------- franjas de borde extruibles
+# Cada límite se dibuja como una franja interna del polígono (poligono - poligono.buffer(-ancho)),
+# calculada en un CRS métrico (EPSG:3857). La capa de extrusión del mapa las eleva a la altura del techo.
+CRS_METRICO = "EPSG:3857"
+ANCHO_PROVINCIA = 2000  # metros
+ANCHOS_DEPARTAMENTO = [400, 200, 100, 50]  # se prueba el siguiente si el buffer negativo vacía un polígono chico
+
+
+def franja(geom, anchos):
+    for ancho in anchos:
+        borde = geom.difference(geom.buffer(-ancho, join_style="mitre"))  # inglete: pocos vértices
+        if not borde.is_empty:
+            return borde
+    return geom.boundary.buffer(10).intersection(geom)  # último recurso: línea fina siguiendo el contorno
+
+
+def franjas(gdf, anchos):
+    metrico = gdf.to_crs(CRS_METRICO)
+    metrico["geometry"] = [franja(g, anchos) for g in metrico.geometry]
+    return metrico.to_crs(epsg=4326)
+
+
+# Departamentos: mismos campos que el polígono (código y valores que definen la altura)
+CAMPOS_ALTURA = ["codigo", "servicios_bajo_media"] + [f"pct_{s_}" for s_ in SERVICIOS] + ["geometry"]
+bordes_deptos = franjas(merged.loc[~merged["sin_datos"], CAMPOS_ALTURA].copy(), ANCHOS_DEPARTAMENTO)
+sal = OUT / "bordes_departamentos.geojson"
+bordes_deptos.to_file(sal, driver="GeoJSON", COORDINATE_PRECISION=4)
+print(f"OK → {sal} ({sal.stat().st_size / 1e6:.2f} MB, {len(bordes_deptos)} franjas)")
+
+# Provincias: código, nombre y porcentajes calculados con los totales de hogares (sin promediar porcentajes)
+bordes_prov = limites[["cpr", "nombre", "geometry"]].copy()
+for _, r in prov.iterrows():
+    for s_ in SERVICIOS:
+        bordes_prov.loc[bordes_prov["cpr"] == r["codigo"], f"pct_{s_}"] = round(100 * r[f"hogares_{s_}"] / r["hogares_total"], 4)
+bordes_prov = franjas(bordes_prov, [ANCHO_PROVINCIA, 1000, 500])
+sal = OUT / "bordes_provincias.geojson"
+bordes_prov.to_file(sal, driver="GeoJSON", COORDINATE_PRECISION=4)
+print(f"OK → {sal} ({sal.stat().st_size / 1e6:.2f} MB, {len(bordes_prov)} franjas)")
 
 # ---------------------------------------------------------------- resumen para la página
 resumen = {

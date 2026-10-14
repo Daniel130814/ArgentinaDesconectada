@@ -2,6 +2,7 @@
 import { initMap, SERVICIOS, esAMBA, esPartidoGBA, nombreProvincia } from './map.js';
 import { initTarjetas, initTooltip } from './panel.js';
 import { initComparador, initMetodologia } from './comparar.js';
+import { initHome } from './home.js';
 
 const NOTAS = {
   agua_red: 'Hogares con agua por red pública.',
@@ -20,8 +21,11 @@ async function main() {
   const geojson = await res.json();
   const resumen = await fetch('data/processed/resumen_nacional.json').then((r) => (r.ok ? r.json() : null));
   const provincias = await fetch('data/processed/provincias.geojson').then((r) => (r.ok ? r.json() : null));
+  const [bordesProv, bordesDeptos] = await Promise.all(['bordes_provincias', 'bordes_departamentos'].map((n) => fetch(`data/processed/${n}.geojson`).then((r) => (r.ok ? r.json() : null))));
+  const bordes = bordesProv && bordesDeptos ? { provincias: bordesProv, departamentos: bordesDeptos } : null;
   if (!resumen || !provincias) throw new Error('No se pudo cargar el resumen o la cartografía provincial.');
   const datosProv = resumen ? resumen.provincias : {};
+  initHome(geojson, resumen);
   const media = resumen ? resumen.media_nacional : null;
 
   const contenedor = document.querySelector('#map');
@@ -45,7 +49,7 @@ async function main() {
     recuadroAmba.hidden = cpr !== '06';
     selProv.value = cpr && datosProv[cpr] ? nombreProvincia(datosProv[cpr].nombre) : '';
   }
-  const mapaPais = initMap(contenedor, geojson, { provincias, resumen, reserva: reservaAmba, contenedorLeyenda: document.querySelector('#leyenda-mapa'), onSeleccion: seleccionar, onProvincia, onProvinciaHover: tooltip.mostrar, onFuera: tarjetas.cerrarPorMapa });
+  const mapaPais = initMap(contenedor, geojson, { provincias, resumen, bordes, reserva: reservaAmba, contenedorLeyenda: document.querySelector('#leyenda-mapa'), onSeleccion: seleccionar, onProvincia, onProvinciaHover: tooltip.mostrar, onFuera: tarjetas.cerrarPorMapa });
   const mapaAmba = initMap(document.querySelector('#map-amba'), geojson, { filtro: esAMBA, activo: esPartidoGBA, conLeyenda: false, conZoom: false, provincias, resumen, onSeleccion: (p) => seleccionar(p), onFuera: tarjetas.cerrarPorMapa });
   comparador = initComparador(geojson, resumen, () => { tarjetas.cerrar(); tooltip.ocultar(); metodologia?.cerrar(); });
   metodologia = initMetodologia(() => { tarjetas.cerrar(); tooltip.ocultar(); comparador.cerrar(); });

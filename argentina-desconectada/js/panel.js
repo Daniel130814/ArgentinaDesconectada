@@ -87,6 +87,10 @@ export function initTarjetas(contenedor, resumen, onCerrar, onComparar = () => {
       ? 2 * Math.min(punto.y - 85, alto - punto.y - 35)
       : Math.max(punto.y - 90, alto - punto.y - 45);
     card.style.maxHeight = `${Math.max(120, Math.min(640, disponible - 20))}px`;
+    if (ancla.mitadAncho && (posicionPopup === 'left' || posicionPopup === 'right')) {
+      const libre = posicionPopup === 'left' ? ancla.map.getContainer().clientWidth - punto.x - 400 : punto.x - 400;
+      popup.setOffset(14 + Math.max(0, Math.min(ancla.mitadAncho(), libre)));
+    }
     popup.setLngLat(ancla.lngLat);
   }
   function desmontar() {
@@ -99,7 +103,7 @@ export function initTarjetas(contenedor, resumen, onCerrar, onComparar = () => {
     card.classList.toggle('bottom-sheet', media.matches);
     if (media.matches) contenedor.append(card);
     else {
-      const punto = ancla.map.project(ancla.lngLat), ancho = ancla.map.getContainer().clientWidth;
+      const punto = ancla.destino || ancla.map.project(ancla.lngLat), ancho = ancla.map.getContainer().clientWidth; // destino: dónde queda el departamento tras centrarlo
       posicionPopup = ancho - punto.x > 414 ? 'left' : punto.x > 414 ? 'right' : undefined;
       popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, focusAfterOpen: false, maxWidth: '390px', className: 'popup-depto', offset: 14, anchor: posicionPopup })
         .setLngLat(ancla.lngLat).setDOMContent(card).addTo(ancla.map);

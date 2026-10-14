@@ -1,9 +1,24 @@
 // Cartografía local sobre un estilo vacío, sin mapas base ni tiles externos.
-export const INFERNO = ['#100b24', '#420a68', '#932667', '#dd513a', '#fca50a', '#fcffa4'];
-export const RAMPAS = {
-  agua_red: INFERNO, cloacas_red: INFERNO, gas_red: INFERNO, internet_vivienda: INFERNO,
-  resumen: ['#100b24', '#561168', '#b83c51', '#f49016', '#fcffa4'],
+// Rampa secuencial propia, de asfalto a amarillo señal: el % de hogares sin servicio (0–100), igual en los 4 servicios.
+export const PARADAS = [[0, '#23272E'], [25, '#4A3F2C'], [50, '#8C5A1E'], [75, '#E07A14'], [100, '#F7D046']];
+export const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+export const mezclar = (a, b, t) => {
+  const x = rgb(a), y = rgb(b);
+  return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join('');
 };
+export function colorEnRampa(v) {
+  const x = Math.max(0, Math.min(100, v));
+  for (let i = 1; i < PARADAS.length; i++) {
+    if (x <= PARADAS[i][0]) return mezclar(PARADAS[i - 1][1], PARADAS[i][1], (x - PARADAS[i - 1][0]) / (PARADAS[i][0] - PARADAS[i - 1][0]));
+  }
+  return PARADAS[PARADAS.length - 1][1];
+}
+// Servicios: un color por tramo de 20 puntos (el del punto medio). Resumen (0–4): cinco pasos de la misma rampa.
+export const RAMPAS = {
+  ...Object.fromEntries(['agua_red', 'cloacas_red', 'gas_red', 'internet_vivienda'].map((k) => [k, [10, 30, 50, 70, 90].map(colorEnRampa)])),
+  resumen: PARADAS.map(([, c]) => c),
+};
+const colorDe = (servicio, v) => (servicio === 'resumen' ? RAMPAS.resumen[v] : colorEnRampa(v));
 export const SERVICIOS = {
   agua_red: { nombre: 'Agua de red', campo: 'pct_agua_red', hogares: 'hogares_agua_red' },
   cloacas_red: { nombre: 'Cloacas', campo: 'pct_cloacas_red', hogares: 'hogares_cloacas_red' },
@@ -11,8 +26,11 @@ export const SERVICIOS = {
   internet_vivienda: { nombre: 'Internet', campo: 'pct_internet_vivienda', hogares: 'hogares_internet_vivienda' },
 };
 const ESPECIALES = new Set(['94021', '94028']);
-const MAX_ALTURA = 63000; // 35% de la escala anterior; unidades visuales, sin significado geográfico.
-const ACENTO = '#ff4f91';
+const MAX_ALTURA = 20000; // altura máxima de extrusión, escala lineal; unidades visuales, sin significado geográfico.
+const PITCH_ESCRITORIO = 40, PITCH_MOVIL = 30;
+const FONDO = '#0B0D10', HUESO = '#F5F5F0';
+const LINEA_DEPARTAMENTO = 0.4, LINEA_PROVINCIA = 0.9; // opacidad de las líneas de la vista plana
+const DIM_OTRAS = 0.7, DIM_VECINOS = 0.3, BORDE_NACIONAL = 0.4; // mezclas con el fondo, por color (sin transparencia)
 const suavizar = (t) => t * t * (3 - 2 * t);
 export const nombreProvincia = (nombre) => nombre === 'Ciudad Autónoma de Buenos Aires' ? 'CABA' : nombre;
 export function alturasProvinciales(geojson, resumen) {
@@ -86,7 +104,7 @@ function rayado(map) {
 export function initMap(container, geojson, opciones = {}) {
   const {
     filtro = null, activo = null, conLeyenda = true, conZoom = true,
-    reserva = () => 0, contenedorLeyenda = null, provincias = null, resumen = null,
+    reserva = () => 0, contenedorLeyenda = null, provincias = null, resumen = null, bordes = null,
     onHover = () => {}, onSeleccion = () => {}, onProvinciaHover = () => {}, onProvincia = () => {}, onFuera = () => {},
   } = opciones;
   if (!container) throw new Error('No se encontró el contenedor del mapa.');
@@ -109,12 +127,12 @@ export function initMap(container, geojson, opciones = {}) {
   let dimensionFrame = 0, factorAltura = conZoom ? 1 : 0;
   const host = document.createElement('div');
   host.className = 'mapa-canvas'; container.append(host);
+  const pitch = () => modo3D ? (mobile() ? PITCH_MOVIL : PITCH_ESCRITORIO) : 0;
   const map = new maplibregl.Map({ container: host, style: vacio(), center: [-64, -39], zoom: 3,
-    pitch: conZoom ? (mobile() ? 30 : 50) : 0, bearing: conZoom ? -20 : 0,
+    pitch: conZoom ? pitch() : 0, bearing: conZoom ? -20 : 0,
     attributionControl: false, renderWorldCopies: false,
     maxZoom: 13, minZoom: 1, dragPan: conZoom, scrollZoom: conZoom, boxZoom: conZoom,
     doubleClickZoom: conZoom, touchZoomRotate: conZoom, keyboard: conZoom, dragRotate: conZoom });
-  const pitch = () => modo3D ? (mobile() ? 30 : 50) : 0;
   const leyenda = conLeyenda ? (contenedorLeyenda || container.appendChild(document.createElement('div'))) : null;
   if (leyenda) leyenda.classList.add('leyenda');
   const volver = document.createElement('button');
@@ -145,41 +163,70 @@ export function initMap(container, geojson, opciones = {}) {
         : `Altura: % de hogares sin ${SERVICIOS[servicio].nombre.toLowerCase()} en la provincia · Color: en cada departamento`;
     leyenda.innerHTML = `<b>${titulo}</b>` + (servicio === 'resumen'
       ? `<p class="leyenda-aclaracion">Clasifica territorios, no hogares sin los cuatro servicios.</p><div class="leyenda-categorias">${RAMPAS.resumen.map((c, i) => `<div><i style="background:${c}"></i>${i} ${i === 1 ? 'servicio' : 'servicios'} bajo la media</div>`).join('')}</div>`
-      : `<div class="leyenda-gradiente" style="background:linear-gradient(to right,${INFERNO.join(',')})"></div><div class="leyenda-marcas">${[0, 20, 40, 60, 80, 100].map((v) => `<span>${v}</span>`).join('')}</div>`)
+      : `<div class="leyenda-gradiente" style="background:linear-gradient(to right,${PARADAS.map(([v, c]) => `${c} ${v}%`).join(',')})"></div><div class="leyenda-marcas">${[0, 20, 40, 60, 80, 100].map((v) => `<span>${v}</span>`).join('')}</div>`)
       + '<div><i class="sin-censo"></i>Sin datos censales</div>';
   }
+  const modoProvincia = () => activo != null || provActual != null;
+  const esActiva = (p) => (activo ? activo({ properties: p }) : p.cpr === provActual);
+  // Altura (escala lineal, máximo MAX_ALTURA) y color base de cada entidad; `dim` es cuánto se mezcla con el fondo.
   function destino(p) {
     const raw = servicio === 'resumen' ? p.servicios_bajo_media : p[SERVICIOS[servicio].campo];
-    if (p.sin_datos || raw == null) return { altura: 0, valor: 0, color: '#b9b9b9' };
+    if (p.sin_datos || raw == null) return { altura: 0, valor: 0, color: '#b9b9b9', dim: 0 };
     const v = servicio === 'resumen' ? raw : Math.max(0, Math.min(100, 100 - raw));
-    const provincia = datosProvinciales[p.cpr];
-    const provincial = servicio === 'resumen' ? provincia?.servicios_bajo_media_ponderado
-      : provincia ? 100 - provincia[SERVICIOS[servicio].campo] : null;
+    const provincial = alturaProvincialDe(p.cpr);
     const escala = MAX_ALTURA / (servicio === 'resumen' ? 4 : 100);
     const alturaDepartamental = v * escala;
-    const alturaProvincial = provincial == null ? alturaDepartamental : Math.max(0, provincial) * escala;
-    const enProvincia = activo ? activo({ properties: p }) : p.cpr === provActual;
-    return { altura: enProvincia ? alturaDepartamental : alturaProvincial,
-      alturaProvincial, alturaDepartamental,
-      valor: servicio === 'resumen' ? v * 25 : v, color: servicio === 'resumen' ? RAMPAS.resumen[v] : INFERNO[0] };
+    const alturaProvincial = provincial == null ? alturaDepartamental : provincial;
+    const activa = esActiva(p);
+    // Al entrar a una provincia, las demás bajan a altura 0 y se atenúan por color.
+    return { altura: !modoProvincia() ? alturaProvincial : activa ? alturaDepartamental : 0,
+      valor: v, color: colorDe(servicio, v), dim: modoProvincia() && !activa ? DIM_OTRAS : 0 };
   }
-  function colorExtrusion() {
-    const color = servicio === 'resumen' ? ['coalesce', ['feature-state', 'color'], RAMPAS.resumen[0]]
-      : ['interpolate', ['linear'], ['coalesce', ['feature-state', 'valor'], 0], ...INFERNO.flatMap((c, i) => [i * 20, c])];
-    return ['case', ['boolean', ['feature-state', 'seleccionado'], false], ACENTO,
-      ['boolean', ['feature-state', 'provinciaHover'], false], '#ffb7d2', color];
+  function alturaProvincialDe(cpr) {
+    const d = datosProvinciales[cpr];
+    if (!d) return null;
+    const escala = MAX_ALTURA / (servicio === 'resumen' ? 4 : 100);
+    const v = servicio === 'resumen' ? d.servicios_bajo_media_ponderado : 100 - d[SERVICIOS[servicio].campo];
+    return v == null ? null : Math.max(0, v) * escala;
   }
-  function alturaExtrusion() {
-    return ['*', factorAltura, ['coalesce', ['feature-state', 'altura'], 0],
+  // Nada de transparencia: la selección y el atenuado se resuelven con el color final de cada departamento.
+  function colorFinal(p, v) {
+    if (p.codigo === seleccionado) return HUESO;
+    const vecino = seleccionado && p.cpr === seleccionado.slice(0, 2) ? DIM_VECINOS : 0;
+    let c = v.color;
+    const dim = Math.max(v.dim, vecino);
+    if (dim) c = mezclar(c, FONDO, dim);
+    if (provinciaHover === p.cpr) c = mezclar(c, HUESO, 0.35);
+    return c;
+  }
+  function aplicar(f, v) {
+    const p = f.properties, color = colorFinal(p, v), sel = p.codigo === seleccionado;
+    map.setFeatureState({ source: 'deptos', id: p.codigo }, { altura: v.altura, color, seleccionado: sel });
+    if (bordes?.departamentos) {
+      // Franjas de departamento: nítidas dentro de la provincia abierta; en la vista nacional, mezcla al 40% con el color.
+      const nitida = modoProvincia() && esActiva(p);
+      map.setFeatureState({ source: 'bordes-deptos', id: p.codigo }, { altura: v.altura, seleccionado: sel, colorBorde: mezclar(color, FONDO, nitida ? 1 : BORDE_NACIONAL) });
+    }
+  }
+  function reaplicar(cond) {
+    if (!listo) return;
+    for (const f of validos) if (cond(f)) { const v = visuales.get(`deptos:${f.properties.codigo}`); if (v) aplicar(f, v); }
+  }
+  const expresionColor = () => ['coalesce', ['feature-state', 'color'], PARADAS[0][1]];
+  function alturaExtrusion(extra = 0) {
+    const base = ['*', factorAltura, ['coalesce', ['feature-state', 'altura'], 0],
       ['case', ['boolean', ['feature-state', 'seleccionado'], false], 1.15, 1]];
+    return extra ? ['+', base, extra] : base;
   }
+  const CAPAS_ALTURA = () => [['departamento-volumen', 0], ['borde-departamento', 1], ['borde-provincia', 1]];
   function aplicarFactor() {
     if (!listo) return;
-    for (const id of ['resto-volumen', 'departamento-volumen', 'departamento-elegido']) {
-      map.setPaintProperty(id, 'fill-extrusion-height', alturaExtrusion());
-    }
-    map.setPaintProperty('resto', 'fill-opacity', factorAltura === 0 ? 0.2 : 0);
-    map.setPaintProperty('resto-volumen', 'fill-extrusion-opacity', factorAltura === 0 ? 0 : 0.2);
+    for (const [id, extra] of CAPAS_ALTURA()) if (map.getLayer(id)) map.setPaintProperty(id, 'fill-extrusion-height', alturaExtrusion(extra));
+    const plano = factorAltura === 0;
+    // En vista plana las franjas se reemplazan por líneas comunes. Se alternan por opacidad (sin reconstruir mosaicos).
+    for (const id of ['borde-departamento', 'borde-provincia']) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', plano ? 'none' : 'visible');
+    map.setPaintProperty('linea-departamento', 'line-opacity', plano ? LINEA_DEPARTAMENTO : 0);
+    map.setPaintProperty('linea-provincia', 'line-opacity', plano ? LINEA_PROVINCIA : 0);
   }
   // Cámara y altura comparten duración y curva; no se limita el pitch antes de animar.
   function animarDimension() {
@@ -199,55 +246,67 @@ export function initMap(container, geojson, opciones = {}) {
   function actualizarValores(duracion = 450) {
     dibujarLeyenda(); if (!listo) return;
     cancelAnimationFrame(frame);
-    map.setPaintProperty('resto', 'fill-color', colorExtrusion());
-    map.setPaintProperty('departamento-base', 'fill-color', colorExtrusion());
-    for (const id of ['resto-volumen', 'departamento-volumen', 'departamento-elegido']) map.setPaintProperty(id, 'fill-extrusion-color', colorExtrusion());
-    const pasos = [['deptos', validos]].flatMap(([source, fs]) => fs.map((f) => {
-      const id = source === 'deptos' ? f.properties.codigo : f.properties.cpr;
-      const key = `${source}:${id}`, fin = destino(f.properties);
-      return { source, id, key, fin, inicio: visuales.get(key) || fin };
-    }));
-    const rgb = (c) => c.match(/\w\w/g).map((x) => parseInt(x, 16));
+    const pasos = validos.map((f) => {
+      const key = `deptos:${f.properties.codigo}`, fin = destino(f.properties);
+      return { f, key, fin, inicio: visuales.get(key) || fin };
+    });
+    const pasosProv = bordes?.provincias ? provs.map((f) => {
+      const key = `provs:${f.properties.cpr}`, fin = { altura: modoProvincia() ? 0 : (alturaProvincialDe(f.properties.cpr) ?? 0) };
+      return { id: f.properties.cpr, key, fin, inicio: visuales.get(key) || fin };
+    }) : [];
     const start = performance.now();
     function tick(now) {
       const t = reduced ? 1 : Math.min(1, (now - start) / duracion);
       for (const paso of pasos) {
-        const a = rgb(paso.inicio.color.slice(1)), b = rgb(paso.fin.color.slice(1));
-        const color = '#' + a.map((v, i) => Math.round(v + (b[i] - v) * t).toString(16).padStart(2, '0')).join('');
+        const a = rgb(paso.inicio.color), b = rgb(paso.fin.color);
         const estado = { altura: paso.inicio.altura + (paso.fin.altura - paso.inicio.altura) * t,
-          alturaProvincial: paso.fin.alturaProvincial, alturaDepartamental: paso.fin.alturaDepartamental,
-          valor: paso.inicio.valor + (paso.fin.valor - paso.inicio.valor) * t, color };
-        visuales.set(paso.key, estado); map.setFeatureState({ source: paso.source, id: paso.id }, estado);
+          valor: paso.inicio.valor + (paso.fin.valor - paso.inicio.valor) * t,
+          dim: paso.inicio.dim + (paso.fin.dim - paso.inicio.dim) * t,
+          color: '#' + a.map((x, i) => Math.round(x + (b[i] - x) * t).toString(16).padStart(2, '0')).join('') };
+        visuales.set(paso.key, estado); aplicar(paso.f, estado);
+      }
+      for (const paso of pasosProv) {
+        const estado = { altura: paso.inicio.altura + (paso.fin.altura - paso.inicio.altura) * t };
+        visuales.set(paso.key, estado); map.setFeatureState({ source: 'bordes-provs', id: paso.id }, estado);
       }
       if (t < 1) frame = requestAnimationFrame(tick);
     }
     frame = requestAnimationFrame(tick);
   }
-  function fit(fs, maxZoom = 7, animar = true) {
+  function fit(fs, maxZoom = 7, animar = true, extra = {}) {
     if (!fs.length) return;
     const bloque = document.querySelector('.introduccion');
     const izquierda = conZoom && !mobile() ? Math.max((bloque?.offsetWidth || 330) + 40, reserva() + 25) : 20;
     map.fitBounds(bounds(fs), { padding: { top: conZoom ? (mobile() ? 55 : 90) : 10,
-      bottom: conZoom ? 65 : 10, left: Math.min(izquierda, host.clientWidth * 0.42), right: conZoom ? 75 : 10 },
+      bottom: (conZoom ? 65 : 10) + (extra.abajo || 0), left: Math.min(izquierda, host.clientWidth * 0.42), right: (conZoom ? 75 : 10) + (extra.derecha || 0) },
       maxZoom, pitch: pitch(), bearing: modo3D ? -20 : 0, duration: animar ? duration : 0 });
+  }
+  // Dónde queda en pantalla el departamento seleccionado: lejos de la tarjeta, que se abre a su lado.
+  function destinoPx() {
+    const ancho = host.clientWidth, alto = host.clientHeight;
+    if (mobile()) return { x: ancho / 2, y: alto * 0.28 };
+    const bloque = document.querySelector('.introduccion');
+    const izquierda = Math.min(Math.max((bloque?.offsetWidth || 330) + 40, reserva() + 25), ancho * 0.42);
+    return { x: izquierda + (ancho - izquierda) * 0.3, y: alto / 2 };
+  }
+  // Al buscar un departamento se deja lugar para la tarjeta: a un costado en escritorio, abajo en celular.
+  const lugarTarjeta = () => (mobile() ? { abajo: host.clientHeight * 0.55 } : { derecha: 440 });
+  function destinoBusqueda() {
+    const ancho = host.clientWidth, alto = host.clientHeight, e = lugarTarjeta();
+    if (e.abajo) return { x: ancho / 2, y: (55 + alto - 65 - e.abajo) / 2 + 20 };
+    const bloque = document.querySelector('.introduccion');
+    const izquierda = Math.min(Math.max((bloque?.offsetWidth || 330) + 40, reserva() + 25), ancho * 0.42);
+    return { x: (izquierda + ancho - 75 - e.derecha) / 2, y: alto / 2 };
+  }
+  // easeTo al centroide manteniendo zoom, pitch y bearing.
+  function centrarEn(f) {
+    const b = bounds([f]), d = destinoPx();
+    map.easeTo({ center: [(b[0][0] + b[1][0]) / 2, (b[0][1] + b[1][1]) / 2],
+      offset: [d.x - host.clientWidth / 2, d.y - host.clientHeight / 2], duration, easing: suavizar });
   }
   function actualizarNivel() {
     if (!listo) return;
     const nacional = conZoom && provActual == null;
-    const activos = activo ? ['in', ['get', 'codigo'], ['literal', validos.filter(activo).map((f) => f.properties.codigo)]]
-      : nacional ? ['has', 'codigo'] : ['==', ['get', 'cpr'], provActual || ''];
-    for (const id of ['departamento-base', 'departamento-volumen', 'departamento-elegido']) {
-      map.setLayoutProperty(id, 'visibility', 'visible');
-      const seleccion = ['==', ['get', 'codigo'], seleccionado || ''];
-      map.setFilter(id, id === 'departamento-elegido' ? ['all', activos, seleccion]
-        : id === 'departamento-volumen' ? ['all', activos, ['!', seleccion]] : activos);
-    }
-    map.setPaintProperty('departamento-volumen', 'fill-extrusion-opacity', seleccionado ? 0.6 : 1);
-    map.setPaintProperty('departamento-base', 'fill-opacity', ['case', ['boolean', ['feature-state', 'atenuado'], false], 0.6, 1]);
-    for (const id of ['resto', 'resto-volumen']) {
-      map.setLayoutProperty(id, 'visibility', !nacional ? 'visible' : 'none');
-      map.setFilter(id, activo ? ['!', ['in', ['get', 'codigo'], ['literal', validos.filter(activo).map((f) => f.properties.codigo)]]] : ['!=', ['get', 'cpr'], provActual || '']);
-    }
     if (conZoom) for (const id of ['etiquetas-principales', 'etiquetas-detalle']) map.setLayoutProperty(id, 'visibility', nacional ? 'visible' : 'none');
     volver.hidden = !provActual; dibujarLeyenda();
   }
@@ -267,11 +326,24 @@ export function initMap(container, geojson, opciones = {}) {
     map.addSource('deptos', { type: 'geojson', data: collection(validos), promoteId: 'codigo' });
     map.addSource('provs', { type: 'geojson', data: collection(provs), promoteId: 'cpr' });
     map.addSource('sin-datos', { type: 'geojson', data: collection(especiales) });
-    map.addLayer({ id: 'resto', type: 'fill', source: 'deptos', paint: { 'fill-color': colorExtrusion(), 'fill-opacity': factorAltura === 0 ? 0.2 : 0 } });
-    map.addLayer({ id: 'departamento-base', type: 'fill', source: 'deptos', paint: { 'fill-color': colorExtrusion() } });
-    for (const id of ['resto-volumen', 'departamento-volumen', 'departamento-elegido']) map.addLayer({ id, type: 'fill-extrusion', source: 'deptos', paint: {
-      'fill-extrusion-color': colorExtrusion(), 'fill-extrusion-height': alturaExtrusion(),
-      'fill-extrusion-height-transition': { duration: 0 }, 'fill-extrusion-opacity': id === 'resto-volumen' ? (factorAltura === 0 ? 0 : 0.2) : 1, 'fill-extrusion-vertical-gradient': true } });
+    map.addLayer({ id: 'departamento-base', type: 'fill', source: 'deptos', paint: { 'fill-color': expresionColor(), 'fill-opacity': 1 } });
+    map.addLayer({ id: 'departamento-volumen', type: 'fill-extrusion', source: 'deptos', paint: {
+      'fill-extrusion-color': expresionColor(), 'fill-extrusion-height': alturaExtrusion(), 'fill-extrusion-base': 0,
+      'fill-extrusion-height-transition': { duration: 0 }, 'fill-extrusion-opacity': 1, 'fill-extrusion-vertical-gradient': true } });
+    // Límites como franjas internas extruidas, con la misma altura (+1) y las mismas transiciones que su polígono.
+    const franja = (id, source, color) => map.addLayer({ id, type: 'fill-extrusion', source, paint: {
+      'fill-extrusion-color': color, 'fill-extrusion-height': alturaExtrusion(1), 'fill-extrusion-base': 0,
+      'fill-extrusion-height-transition': { duration: 0 }, 'fill-extrusion-opacity': 1, 'fill-extrusion-vertical-gradient': false } });
+    if (bordes?.departamentos) {
+      map.addSource('bordes-deptos', { type: 'geojson', data: bordes.departamentos, promoteId: 'codigo' });
+      franja('borde-departamento', 'bordes-deptos', ['coalesce', ['feature-state', 'colorBorde'], FONDO]);
+    }
+    if (bordes?.provincias) {
+      map.addSource('bordes-provs', { type: 'geojson', data: bordes.provincias, promoteId: 'cpr' });
+      franja('borde-provincia', 'bordes-provs', FONDO);
+    }
+    map.addLayer({ id: 'linea-departamento', type: 'line', source: 'deptos', paint: { 'line-color': HUESO, 'line-width': 0.4, 'line-opacity': 0 } });
+    map.addLayer({ id: 'linea-provincia', type: 'line', source: 'provs', paint: { 'line-color': HUESO, 'line-width': 1.2, 'line-opacity': 0 } });
     map.addLayer({ id: 'sin-censo', type: 'fill', source: 'sin-datos', paint: { 'fill-pattern': 'sin-censo' } });
     if (conZoom) {
       const puntos = provs.map((f) => {
@@ -285,24 +357,28 @@ export function initMap(container, geojson, opciones = {}) {
       map.addSource('malvinas', { type: 'geojson', data: collection([{ type: 'Feature', properties: { nombre: 'Islas Malvinas', prioridad: 0 }, geometry: { type: 'Point', coordinates: [-59.5, -51.8] } }]) });
       map.addLayer(simbolo('etiqueta-malvinas', 'malvinas'));
     }
-    listo = true; actualizarNivel(); actualizarValores();
+    listo = true; aplicarFactor(); actualizarNivel(); actualizarValores();
     marcar(seleccionado);
     fit(activo ? validos.filter(activo) : provActual ? validos.filter((f) => f.properties.cpr === provActual) : validos, conZoom ? 7 : 10, false);
   });
   map.on('error', (e) => { const status = document.querySelector('#status'); if (status) status.textContent = `No se pudo dibujar el mapa: ${e.error.message}`; console.error(e.error); });
+  // Dentro de una provincia solo responden sus departamentos; las demás no son interactivas.
+  const interactivo = (p) => (activo ? activo({ properties: p }) : !conZoom || provActual == null || p.cpr === provActual);
   function hit(e) {
     if (!listo) return null;
     const nacional = conZoom && !provActual;
-    const layers = ['departamento-elegido', 'departamento-volumen', 'departamento-base'];
+    const layers = ['departamento-volumen', 'departamento-base'];
     if (nacional) layers.unshift('etiquetas-principales', 'etiquetas-detalle');
-    return map.queryRenderedFeatures(e.point, { layers })[0];
+    const f = map.queryRenderedFeatures(e.point, { layers }).find((x) => !x.properties.codigo || interactivo(x.properties));
+    return f || null;
   }
   map.on('click', (e) => {
     const f = hit(e); if (!f) { onFuera(); return; }
     if (conZoom && !provActual) abrir(f.properties.cpr);
     else {
       const departamento = feats.find((d) => d.properties.codigo === f.properties.codigo);
-      onSeleccion(departamento.properties, anclaDe(departamento));
+      if (conZoom) centrarEn(departamento);
+      onSeleccion(departamento.properties, anclaDe(departamento, conZoom));
     }
   });
   map.on('mousemove', (e) => {
@@ -341,22 +417,23 @@ export function initMap(container, geojson, opciones = {}) {
   dibujarLeyenda();
   function resaltarProvincia(cpr) {
     if (!listo || provinciaHover === cpr) return;
-    for (const f of validos) if (f.properties.cpr === provinciaHover || f.properties.cpr === cpr) {
-      map.setFeatureState({ source: 'deptos', id: f.properties.codigo }, { provinciaHover: f.properties.cpr === cpr });
-    }
+    const antes = provinciaHover;
     provinciaHover = cpr;
+    reaplicar((f) => f.properties.cpr === antes || f.properties.cpr === cpr);
   }
   function marcar(codigo) {
+    const antes = seleccionado;
     seleccionado = validos.some((f) => f.properties.codigo === codigo) ? codigo : null;
     if (!listo) return;
-    for (const f of validos) map.setFeatureState({ source: 'deptos', id: f.properties.codigo }, {
-      seleccionado: f.properties.codigo === seleccionado,
-      atenuado: !!seleccionado && f.properties.codigo !== seleccionado && f.properties.cpr === seleccionado.slice(0, 2),
-    });
+    const afectadas = new Set([antes, seleccionado].filter(Boolean).map((c) => c.slice(0, 2)));
+    reaplicar((f) => afectadas.has(f.properties.cpr));
     actualizarNivel();
   }
-  function anclaDe(f) {
-    const b = bounds([f]); return { map, lngLat: [(b[0][0] + b[1][0]) / 2, (b[0][1] + b[1][1]) / 2] };
+  function anclaDe(f, conDestino = false) {
+    const b = bounds([f]), centro = [(b[0][0] + b[1][0]) / 2, (b[0][1] + b[1][1]) / 2];
+    // mitadAncho: cuánto mide hoy, en pantalla, la mitad del departamento; la tarjeta se corre ese tanto para no taparlo.
+    return { map, lngLat: centro, destino: conDestino ? destinoPx() : null,
+      mitadAncho: () => Math.abs(map.project([b[1][0], centro[1]]).x - map.project(centro).x) };
   }
   return {
     salir, nivel: () => provActual == null ? 'pais' : 'provincia',
@@ -368,13 +445,14 @@ export function initMap(container, geojson, opciones = {}) {
     marcar,
     ancla(codigo) {
       const f = validos.find((d) => d.properties.codigo === codigo); if (!f) return null;
-      return anclaDe(f);
+      const a = anclaDe(f);
+      return conZoom ? { ...a, destino: destinoBusqueda() } : a;
     },
     enfocar(codigo) {
       if (!conZoom) return;
       const f = validos.find((d) => d.properties.codigo === codigo); if (!f) return;
       if (provActual !== f.properties.cpr) abrir(f.properties.cpr);
-      this.marcar(codigo); if (listo) fit([f], 11);
+      this.marcar(codigo); if (listo) fit([f], 11, true, lugarTarjeta());
     },
     entrarProvincia(nombre) { const f = provs.find((d) => nombreProvincia(d.properties.nombre) === nombre); if (f) abrir(f.properties.cpr); else salir(); },
   };
