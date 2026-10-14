@@ -1,9 +1,7 @@
 // Cartografía local sobre un estilo vacío, sin mapas base ni tiles externos.
+export const INFERNO = ['#100b24', '#420a68', '#932667', '#dd513a', '#fca50a', '#fcffa4'];
 export const RAMPAS = {
-  agua_red: ['#183447', '#245e80', '#318bb8', '#55bce6', '#a1e9ff'],
-  cloacas_red: ['#302743', '#5e467b', '#9264b8', '#bf92e0', '#eed0ff'],
-  gas_red: ['#442c20', '#84502e', '#bd733b', '#eda454', '#ffe09a'],
-  internet_vivienda: ['#183c32', '#286b52', '#389672', '#66c79a', '#b0f7cb'],
+  agua_red: INFERNO, cloacas_red: INFERNO, gas_red: INFERNO, internet_vivienda: INFERNO,
   resumen: ['#3a3021', '#775529', '#b18136', '#e7b750', '#ffe79c'],
 };
 export const SERVICIOS = {
@@ -13,16 +11,38 @@ export const SERVICIOS = {
   internet_vivienda: { nombre: 'Internet', campo: 'pct_internet_vivienda', hogares: 'hogares_internet_vivienda' },
 };
 const ESPECIALES = new Set(['94021', '94028']);
-const MAX_ALTURA = 100000; // Metros visuales: escala lineal, sin significado geográfico.
+const MAX_ALTURA = 180000; // Metros visuales: escala lineal exagerada, sin significado geográfico.
 const ACENTO = '#ff4f91';
 const suavizar = (t) => t * t * (3 - 2 * t);
+export const nombreProvincia = (nombre) => nombre === 'Ciudad Autónoma de Buenos Aires' ? 'CABA' : nombre;
 export function rangoColor(p, servicio) {
   if (p.sin_datos || ESPECIALES.has(p.codigo)) return null;
   const v = servicio === 'resumen' ? p.servicios_bajo_media : p[SERVICIOS[servicio].campo];
   return v == null ? null : servicio === 'resumen' ? v : Math.min(4, Math.floor(Math.max(0, 100 - v) / 20));
 }
 const collection = (features) => ({ type: 'FeatureCollection', features });
-const vacio = () => ({ version: 8, sources: {}, layers: [{ id: 'fondo', type: 'background', paint: { 'background-color': '#0B0D10' } }] });
+const vacio = () => ({ version: 8, glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+  sources: {}, layers: [{ id: 'fondo', type: 'background', paint: { 'background-color': '#0B0D10' } }] });
+const PRIORIDADES = ['02', '06', '14', '50', '66', '22', '58', '26', '78', '54'];
+const puntoMedio = (features) => { const b = bounds(features); return [(b[0][0] + b[1][0]) / 2, (b[0][1] + b[1][1]) / 2]; };
+
+function simbolo(id, source, opciones = {}) {
+  return { id, type: 'symbol', source, ...opciones, layout: {
+    'text-field': ['get', 'nombre'], 'text-font': ['Open Sans Semibold'], 'text-size': 12,
+    'text-anchor': 'left', 'text-offset': [0.65, 0], 'text-max-width': 10,
+    'text-allow-overlap': false, 'icon-allow-overlap': false, 'icon-image': 'punto-etiqueta',
+    'icon-size': 0.6, 'symbol-sort-key': ['get', 'prioridad'],
+    'text-pitch-alignment': 'viewport', 'icon-pitch-alignment': 'viewport',
+    'text-rotation-alignment': 'viewport', 'icon-rotation-alignment': 'viewport',
+  }, paint: { 'text-color': '#fff', 'text-halo-color': '#0b0d10', 'text-halo-width': 1.8 } };
+}
+function puntoEtiqueta(map) {
+  const data = new Uint8Array(12 * 12 * 4);
+  for (let y = 0; y < 12; y++) for (let x = 0; x < 12; x++) {
+    if ((x - 5.5) ** 2 + (y - 5.5) ** 2 < 22) data.set([255, 255, 255, 255], (y * 12 + x) * 4);
+  }
+  map.addImage('punto-etiqueta', { width: 12, height: 12, data });
+}
 
 function bounds(features) {
   const b = [180, 90, -180, -90];
@@ -69,18 +89,19 @@ export function initMap(container, geojson, opciones = {}) {
     return { ...f, properties: p };
   });
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const mobile = () => window.matchMedia('(max-width: 860px)').matches;
+  const mobile = () => window.matchMedia('(max-width: 767px)').matches;
   const duration = reduced ? 0 : 650;
-  let servicio = 'agua_red', provActual = null, seleccionado = null, listo = false, modo3D = conZoom;
+  let servicio = 'agua_red', provActual = null, seleccionado = null, listo = false, modo3D = conZoom, provinciaHover = null;
   let frame = 0, visuales = new Map();
   let dimensionFrame = 0, factorAltura = conZoom ? 1 : 0;
   const host = document.createElement('div');
   host.className = 'mapa-canvas'; container.append(host);
   const map = new maplibregl.Map({ container: host, style: vacio(), center: [-64, -39], zoom: 3,
-    pitch: conZoom ? (mobile() ? 30 : 45) : 0, attributionControl: false, renderWorldCopies: false,
+    pitch: conZoom ? (mobile() ? 30 : 50) : 0, bearing: conZoom ? -20 : 0,
+    attributionControl: false, renderWorldCopies: false,
     maxZoom: 13, minZoom: 1, dragPan: conZoom, scrollZoom: conZoom, boxZoom: conZoom,
     doubleClickZoom: conZoom, touchZoomRotate: conZoom, keyboard: conZoom, dragRotate: conZoom });
-  const pitch = () => modo3D ? (mobile() ? 30 : 45) : 0;
+  const pitch = () => modo3D ? (mobile() ? 30 : 50) : 0;
   const leyenda = conLeyenda ? (contenedorLeyenda || container.appendChild(document.createElement('div'))) : null;
   if (leyenda) leyenda.classList.add('leyenda');
   const volver = document.createElement('button');
@@ -88,7 +109,7 @@ export function initMap(container, geojson, opciones = {}) {
   if (conZoom) {
     container.append(volver); volver.addEventListener('click', salir);
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
-    map.addControl(new maplibregl.FullscreenControl({ container: container.parentElement }), 'top-right');
+    map.addControl(new maplibregl.FullscreenControl({ container: document.querySelector('.pagina') }), 'top-right');
     map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: 'Fuente: INDEC, Censo 2022 · Cartografía: INDEC/IGN' }), 'bottom-right');
     const boton = document.createElement('button');
     boton.type = 'button'; boton.className = 'mapa-dimension'; boton.textContent = 'Vista plana';
@@ -103,27 +124,33 @@ export function initMap(container, geojson, opciones = {}) {
   }
   function dibujarLeyenda() {
     if (!leyenda) return;
-    const titulo = servicio === 'resumen' ? `Altura y color: servicios bajo la media nacional<br>(${provActual ? 'departamentos' : 'provincias'}, de 0 a 4; clasifica territorios)`
+    const titulo = servicio === 'resumen' ? 'Altura y color: servicios bajo la media nacional<br>(departamentos, de 0 a 4; clasifica territorios)'
       : `Altura y color: % de hogares sin ${SERVICIOS[servicio].nombre.toLowerCase()}`;
-    leyenda.innerHTML = `<b>${titulo}</b>` + RAMPAS[servicio].map((c, i) => `<div><i style="background:${c}"></i>${servicio === 'resumen' ? i : `${i * 20}–${(i + 1) * 20}%`}</div>`).join('')
+    leyenda.innerHTML = `<b>${titulo}</b>` + (servicio === 'resumen'
+      ? `<div class="leyenda-categorias">${RAMPAS.resumen.map((c, i) => `<div><i style="background:${c}"></i>${i}</div>`).join('')}</div>`
+      : `<div class="leyenda-gradiente" style="background:linear-gradient(to right,${INFERNO.join(',')})"></div><div class="leyenda-marcas">${[0, 20, 40, 60, 80, 100].map((v) => `<span>${v}</span>`).join('')}</div>`)
       + '<div><i class="sin-censo"></i>Sin datos censales</div>';
   }
   function destino(p) {
     const raw = servicio === 'resumen' ? p.servicios_bajo_media : p[SERVICIOS[servicio].campo];
-    if (p.sin_datos || raw == null) return { altura: 0, color: '#b9b9b9' };
+    if (p.sin_datos || raw == null) return { altura: 0, valor: 0, color: '#b9b9b9' };
     const v = servicio === 'resumen' ? raw : Math.max(0, Math.min(100, 100 - raw));
     return { altura: v / (servicio === 'resumen' ? 4 : 100) * MAX_ALTURA,
-      color: RAMPAS[servicio][servicio === 'resumen' ? v : Math.min(4, Math.floor(v / 20))] };
+      valor: servicio === 'resumen' ? v * 25 : v, color: servicio === 'resumen' ? RAMPAS.resumen[v] : INFERNO[0] };
   }
-  const colorExtrusion = ['case', ['boolean', ['feature-state', 'seleccionado'], false], ACENTO,
-    ['coalesce', ['feature-state', 'color'], '#b9b9b9']];
+  function colorExtrusion() {
+    const color = servicio === 'resumen' ? ['coalesce', ['feature-state', 'color'], RAMPAS.resumen[0]]
+      : ['interpolate', ['linear'], ['coalesce', ['feature-state', 'valor'], 0], ...INFERNO.flatMap((c, i) => [i * 20, c])];
+    return ['case', ['boolean', ['feature-state', 'seleccionado'], false], ACENTO,
+      ['boolean', ['feature-state', 'provinciaHover'], false], '#ffb7d2', color];
+  }
   function alturaExtrusion() {
     return ['*', factorAltura, ['coalesce', ['feature-state', 'altura'], 0],
       ['case', ['boolean', ['feature-state', 'seleccionado'], false], 1.15, 1]];
   }
   function aplicarFactor() {
     if (!listo) return;
-    for (const id of ['provincia-volumen', 'departamento-volumen', 'departamento-elegido']) {
+    for (const id of ['departamento-volumen', 'departamento-elegido']) {
       map.setPaintProperty(id, 'fill-extrusion-height', alturaExtrusion());
     }
   }
@@ -132,7 +159,7 @@ export function initMap(container, geojson, opciones = {}) {
     cancelAnimationFrame(dimensionFrame);
     const inicio = factorAltura, fin = modo3D ? 1 : 0, start = performance.now();
     map.setMaxPitch(60);
-    map.easeTo({ pitch: pitch(), bearing: 0, duration, easing: suavizar });
+    map.easeTo({ pitch: pitch(), bearing: modo3D ? -20 : 0, duration, easing: suavizar });
     function tick(now) {
       const t = reduced ? 1 : Math.min(1, (now - start) / duration);
       factorAltura = inicio + (fin - inicio) * suavizar(t); aplicarFactor();
@@ -145,7 +172,10 @@ export function initMap(container, geojson, opciones = {}) {
   function actualizarValores() {
     dibujarLeyenda(); if (!listo) return;
     cancelAnimationFrame(frame);
-    const pasos = [['deptos', validos], ['provs', provs]].flatMap(([source, fs]) => fs.map((f) => {
+    map.setPaintProperty('resto', 'fill-color', colorExtrusion());
+    map.setPaintProperty('departamento-base', 'fill-color', colorExtrusion());
+    for (const id of ['departamento-volumen', 'departamento-elegido']) map.setPaintProperty(id, 'fill-extrusion-color', colorExtrusion());
+    const pasos = [['deptos', validos]].flatMap(([source, fs]) => fs.map((f) => {
       const id = source === 'deptos' ? f.properties.codigo : f.properties.cpr;
       const key = `${source}:${id}`, fin = destino(f.properties);
       return { source, id, key, fin, inicio: visuales.get(key) || fin };
@@ -157,7 +187,8 @@ export function initMap(container, geojson, opciones = {}) {
       for (const paso of pasos) {
         const a = rgb(paso.inicio.color.slice(1)), b = rgb(paso.fin.color.slice(1));
         const color = '#' + a.map((v, i) => Math.round(v + (b[i] - v) * t).toString(16).padStart(2, '0')).join('');
-        const estado = { altura: paso.inicio.altura + (paso.fin.altura - paso.inicio.altura) * t, color };
+        const estado = { altura: paso.inicio.altura + (paso.fin.altura - paso.inicio.altura) * t,
+          valor: paso.inicio.valor + (paso.fin.valor - paso.inicio.valor) * t, color };
         visuales.set(paso.key, estado); map.setFeatureState({ source: paso.source, id: paso.id }, estado);
       }
       if (t < 1) frame = requestAnimationFrame(tick);
@@ -166,16 +197,19 @@ export function initMap(container, geojson, opciones = {}) {
   }
   function fit(fs, maxZoom = 7, animar = true) {
     if (!fs.length) return;
-    map.fitBounds(bounds(fs), { padding: { top: 65, bottom: conZoom ? 65 : 15, left: Math.min(reserva() + 25, host.clientWidth / 2), right: 45 },
-      maxZoom, pitch: pitch(), duration: animar ? duration : 0 });
+    const bloque = document.querySelector('.introduccion');
+    const izquierda = conZoom && !mobile() ? Math.max((bloque?.offsetWidth || 330) + 40, reserva() + 25) : 20;
+    map.fitBounds(bounds(fs), { padding: { top: conZoom ? (mobile() ? 55 : 90) : 10,
+      bottom: conZoom ? 65 : 10, left: Math.min(izquierda, host.clientWidth * 0.42), right: conZoom ? 75 : 10 },
+      maxZoom, pitch: pitch(), bearing: modo3D ? -20 : 0, duration: animar ? duration : 0 });
   }
   function actualizarNivel() {
     if (!listo) return;
     const nacional = conZoom && provActual == null;
-    for (const id of ['provincia-base', 'provincia-volumen', 'provincia-borde']) map.setLayoutProperty(id, 'visibility', nacional ? 'visible' : 'none');
-    const activos = activo ? ['in', ['get', 'codigo'], ['literal', validos.filter(activo).map((f) => f.properties.codigo)]] : ['==', ['get', 'cpr'], provActual || ''];
+    const activos = activo ? ['in', ['get', 'codigo'], ['literal', validos.filter(activo).map((f) => f.properties.codigo)]]
+      : nacional ? ['has', 'codigo'] : ['==', ['get', 'cpr'], provActual || ''];
     for (const id of ['departamento-base', 'departamento-volumen', 'departamento-borde', 'departamento-elegido']) {
-      map.setLayoutProperty(id, 'visibility', nacional ? 'none' : 'visible');
+      map.setLayoutProperty(id, 'visibility', id === 'departamento-borde' && nacional ? 'none' : 'visible');
       const seleccion = ['==', ['get', 'codigo'], seleccionado || ''];
       map.setFilter(id, id === 'departamento-elegido' ? ['all', activos, seleccion]
         : id === 'departamento-volumen' ? ['all', activos, ['!', seleccion]] : activos);
@@ -184,12 +218,12 @@ export function initMap(container, geojson, opciones = {}) {
     map.setPaintProperty('departamento-base', 'fill-opacity', ['case', ['boolean', ['feature-state', 'atenuado'], false], 0.6, 1]);
     map.setLayoutProperty('resto', 'visibility', !nacional ? 'visible' : 'none');
     map.setFilter('resto', activo ? ['!', ['in', ['get', 'codigo'], ['literal', validos.filter(activo).map((f) => f.properties.codigo)]]] : ['!=', ['get', 'cpr'], provActual || '']);
-    etiquetas.forEach(({ marker }) => { marker.getElement().hidden = !nacional; });
+    if (conZoom) for (const id of ['etiquetas-principales', 'etiquetas-detalle']) map.setLayoutProperty(id, 'visibility', nacional ? 'visible' : 'none');
     volver.hidden = !provActual; dibujarLeyenda();
   }
   function abrir(cpr) {
     if (!provs.some((f) => f.properties.cpr === cpr)) return;
-    marcar(null); provActual = cpr; onProvinciaHover(null); onProvincia(cpr); actualizarNivel();
+    marcar(null); resaltarProvincia(null); provActual = cpr; onProvinciaHover(null); onProvincia(cpr); actualizarNivel();
     if (listo) fit(validos.filter((f) => f.properties.cpr === cpr));
   }
   function salir() {
@@ -197,33 +231,30 @@ export function initMap(container, geojson, opciones = {}) {
     marcar(null); provActual = null; onProvinciaHover(null); onProvincia(null); actualizarNivel();
     if (listo) fit(validos);
   }
-  const etiquetas = [];
   map.on('load', () => {
-    rayado(map);
+    rayado(map); puntoEtiqueta(map);
+    map.setLight({ anchor: 'viewport', position: [1.5, 200, 35], intensity: 0.45 });
     map.addSource('deptos', { type: 'geojson', data: collection(validos), promoteId: 'codigo' });
     map.addSource('provs', { type: 'geojson', data: collection(provs), promoteId: 'cpr' });
     map.addSource('sin-datos', { type: 'geojson', data: collection(especiales) });
-    map.addLayer({ id: 'resto', type: 'fill', source: activo ? 'deptos' : 'provs', paint: { 'fill-color': ['coalesce', ['feature-state', 'color'], '#b9b9b9'], 'fill-opacity': 0.2 } });
-    for (const [prefijo, source] of [['provincia', 'provs'], ['departamento', 'deptos']]) {
-      const color = colorExtrusion;
-      map.addLayer({ id: `${prefijo}-base`, type: 'fill', source, paint: { 'fill-color': color } });
-      map.addLayer({ id: `${prefijo}-volumen`, type: 'fill-extrusion', source, paint: {
-        'fill-extrusion-color': color, 'fill-extrusion-height': alturaExtrusion(),
-        'fill-extrusion-height-transition': { duration: 0 }, 'fill-extrusion-opacity': 1 } });
-      map.addLayer({ id: `${prefijo}-borde`, type: 'line', source, paint: { 'line-color': '#dae1eb', 'line-width': prefijo === 'provincia' ? 1 : 0.5 } });
-    }
+    map.addLayer({ id: 'resto', type: 'fill', source: 'deptos', paint: { 'fill-color': colorExtrusion(), 'fill-opacity': 0.2 } });
+    map.addLayer({ id: 'departamento-base', type: 'fill', source: 'deptos', paint: { 'fill-color': colorExtrusion() } });
+    for (const id of ['departamento-volumen', 'departamento-elegido']) map.addLayer({ id, type: 'fill-extrusion', source: 'deptos', paint: {
+      'fill-extrusion-color': colorExtrusion(), 'fill-extrusion-height': alturaExtrusion(),
+      'fill-extrusion-height-transition': { duration: 0 }, 'fill-extrusion-opacity': 1, 'fill-extrusion-vertical-gradient': true } });
+    map.addLayer({ id: 'departamento-borde', type: 'line', source: 'deptos', paint: { 'line-color': '#dae1eb', 'line-width': 0.5 } });
     map.addLayer({ id: 'sin-censo', type: 'fill', source: 'sin-datos', paint: { 'fill-pattern': 'sin-censo' } });
-    // Misma fuente y coordenadas: la selección conserva el alineamiento en todos los ángulos.
-    map.addLayer({ id: 'departamento-elegido', type: 'fill-extrusion', source: 'deptos', paint: {
-      'fill-extrusion-color': colorExtrusion, 'fill-extrusion-height': alturaExtrusion(),
-      'fill-extrusion-height-transition': { duration: 0 }, 'fill-extrusion-opacity': 1 } });
-    if (conZoom) for (const f of provs) {
-      const b = bounds(validos.filter((d) => d.properties.cpr === f.properties.cpr));
-      const el = document.createElement('button'); el.type = 'button'; el.className = 'etiqueta-prov';
-      el.textContent = f.properties.nombre; el.setAttribute('aria-label', `Ver departamentos de ${f.properties.nombre}`);
-      el.addEventListener('click', (e) => { e.stopPropagation(); abrir(f.properties.cpr); });
-      const marker = new maplibregl.Marker({ element: el }).setLngLat([(b[0][0] + b[1][0]) / 2, (b[0][1] + b[1][1]) / 2]).addTo(map);
-      etiquetas.push({ marker });
+    if (conZoom) {
+      const puntos = provs.map((f) => {
+        const cpr = f.properties.cpr, prioridad = PRIORIDADES.indexOf(cpr);
+        return { type: 'Feature', geometry: { type: 'Point', coordinates: puntoMedio(validos.filter((d) => d.properties.cpr === cpr)) },
+          properties: { cpr, nombre: cpr === '94' ? 'Tierra del Fuego' : nombreProvincia(f.properties.nombre), principal: prioridad >= 0, prioridad: prioridad >= 0 ? prioridad : 20 + Number(cpr) } };
+      });
+      map.addSource('etiquetas', { type: 'geojson', data: collection(puntos) });
+      map.addLayer(simbolo('etiquetas-principales', 'etiquetas', { minzoom: 0, filter: ['==', ['get', 'principal'], true] }));
+      map.addLayer(simbolo('etiquetas-detalle', 'etiquetas', { minzoom: 5, filter: ['==', ['get', 'principal'], false] }));
+      map.addSource('malvinas', { type: 'geojson', data: collection([{ type: 'Feature', properties: { nombre: 'Islas Malvinas', prioridad: 0 }, geometry: { type: 'Point', coordinates: [-59.5, -51.8] } }]) });
+      map.addLayer(simbolo('etiqueta-malvinas', 'malvinas'));
     }
     listo = true; actualizarNivel(); actualizarValores();
     marcar(seleccionado);
@@ -233,7 +264,8 @@ export function initMap(container, geojson, opciones = {}) {
   function hit(e) {
     if (!listo) return null;
     const nacional = conZoom && !provActual;
-    const layers = nacional ? ['provincia-volumen', 'provincia-base'] : ['departamento-elegido', 'departamento-volumen', 'departamento-base'];
+    const layers = ['departamento-elegido', 'departamento-volumen', 'departamento-base'];
+    if (nacional) layers.unshift('etiquetas-principales', 'etiquetas-detalle');
     return map.queryRenderedFeatures(e.point, { layers })[0];
   }
   map.on('click', (e) => {
@@ -247,10 +279,13 @@ export function initMap(container, geojson, opciones = {}) {
   map.on('mousemove', (e) => {
     if (e.originalEvent?.sourceCapabilities?.firesTouchEvents) return;
     const f = hit(e); map.getCanvas().style.cursor = f ? 'pointer' : '';
-    if (conZoom && !provActual) onProvinciaHover(f?.properties.cpr || null, e.originalEvent);
+    if (conZoom && !provActual) {
+      resaltarProvincia(f?.properties.cpr || null);
+      onProvinciaHover(f?.properties.cpr || null, e.originalEvent);
+    }
     else if (f) onHover(feats.find((d) => d.properties.codigo === f.properties.codigo).properties);
   });
-  map.getCanvas().addEventListener('mouseleave', () => onProvinciaHover(null));
+  map.getCanvas().addEventListener('mouseleave', () => { resaltarProvincia(null); onProvinciaHover(null); });
   new ResizeObserver(() => {
     map.resize();
     if (listo && !conZoom && host.clientWidth) fit(activo ? validos.filter(activo) : validos, 10, false);
@@ -259,17 +294,29 @@ export function initMap(container, geojson, opciones = {}) {
   // Recuadro permanente: ambas geometrías siguen presentes en el mapa principal.
   if (conZoom && especiales.length) {
     const inset = document.createElement('div'); inset.className = 'territorios-sin-censo';
-    const titulo = document.createElement('span'); titulo.textContent = 'Antártida e Islas del Atlántico Sur · Sin datos censales'; inset.append(titulo);
+    const titulo = document.createElement('span'); titulo.textContent = 'Territorios sin datos censales'; inset.append(titulo);
     const miniHost = document.createElement('div'); miniHost.className = 'territorios-canvas'; inset.append(miniHost); container.append(inset);
     const mini = new maplibregl.Map({ container: miniHost, style: vacio(), interactive: false, attributionControl: false, renderWorldCopies: false });
     mini.on('load', () => {
-      rayado(mini); mini.addSource('territorios', { type: 'geojson', data: collection(especiales) });
+      rayado(mini); puntoEtiqueta(mini); mini.addSource('territorios', { type: 'geojson', data: collection(especiales) });
       mini.addLayer({ id: 'territorios', type: 'fill', source: 'territorios', paint: { 'fill-pattern': 'sin-censo' } });
-      mini.fitBounds(bounds(especiales), { padding: 10, duration: 0 });
+      mini.addSource('nombres-territorios', { type: 'geojson', data: collection([
+        { type: 'Feature', geometry: { type: 'Point', coordinates: [-52, -74] }, properties: { nombre: 'Antártida', prioridad: 0 } },
+        { type: 'Feature', geometry: { type: 'Point', coordinates: [-59.5, -51.8] }, properties: { nombre: 'Islas Malvinas', prioridad: 1 } },
+      ]) });
+      mini.addLayer(simbolo('etiquetas-territorios', 'nombres-territorios'));
+      mini.fitBounds(bounds(especiales), { padding: { top: 20, bottom: 10, left: 5, right: 50 }, duration: 0 });
     });
     new ResizeObserver(() => mini.resize()).observe(miniHost);
   }
   dibujarLeyenda();
+  function resaltarProvincia(cpr) {
+    if (!listo || provinciaHover === cpr) return;
+    for (const f of validos) if (f.properties.cpr === provinciaHover || f.properties.cpr === cpr) {
+      map.setFeatureState({ source: 'deptos', id: f.properties.codigo }, { provinciaHover: f.properties.cpr === cpr });
+    }
+    provinciaHover = cpr;
+  }
   function marcar(codigo) {
     seleccionado = validos.some((f) => f.properties.codigo === codigo) ? codigo : null;
     if (!listo) return;
@@ -296,7 +343,7 @@ export function initMap(container, geojson, opciones = {}) {
       if (provActual !== f.properties.cpr) abrir(f.properties.cpr);
       this.marcar(codigo); if (listo) fit([f], 11);
     },
-    entrarProvincia(nombre) { const f = provs.find((d) => d.properties.nombre === nombre); if (f) abrir(f.properties.cpr); else salir(); },
+    entrarProvincia(nombre) { const f = provs.find((d) => nombreProvincia(d.properties.nombre) === nombre); if (f) abrir(f.properties.cpr); else salir(); },
   };
 }
 

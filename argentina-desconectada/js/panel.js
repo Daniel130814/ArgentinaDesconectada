@@ -1,5 +1,5 @@
 // Tarjetas de territorio, fuentes y comparación sobre el mapa.
-import { SERVICIOS, RAMPAS, rangoColor } from './map.js';
+import { SERVICIOS, RAMPAS, rangoColor, nombreProvincia } from './map.js';
 
 const miles = new Intl.NumberFormat('es-AR');
 const pct = (v) => `${v.toFixed(1).replace('.', ',')}%`;
@@ -26,13 +26,13 @@ export function htmlDepartamento(p, servicio, resumen, comparar = null, fuenteAb
       <small>Nación ${pct(media[k])}${prov ? ` · Provincia ${pct(prov[k])}` : ''}</small>
     </div>`;
   }).join('');
-  const comparacion = comparar && comparar.codigo !== p.codigo ? `<section class="comparacion"><h3>Comparación con ${escapar(comparar.territorio)}</h3><p>${escapar(comparar.provincia)}</p>
+  const comparacion = comparar && comparar.codigo !== p.codigo ? `<section class="comparacion"><h3>Comparación con ${escapar(comparar.territorio)}</h3><p>${escapar(nombreProvincia(comparar.provincia))}</p>
     <table><caption>Acceso al servicio; diferencia del departamento elegido respecto del anterior.</caption><thead><tr><th>Servicio</th><th>${escapar(p.territorio)}</th><th>${escapar(comparar.territorio)}</th><th>Dif.</th></tr></thead>
     <tbody>${Object.entries(SERVICIOS).map(([k, s]) => {
       const dif = p[s.campo] - comparar[s.campo];
       return `<tr class="${k === servicio ? 'activa' : ''}"><th>${s.nombre}</th><td>${pct(p[s.campo])}<small>${miles.format(p[s.hogares])} hogares</small></td><td>${pct(comparar[s.campo])}<small>${miles.format(comparar[s.hogares])} hogares</small></td><td>${dif > 0 ? '+' : ''}${dif.toFixed(1).replace('.', ',')} pp</td></tr>`;
     }).join('')}</tbody></table><p>pp: puntos porcentuales. Cada porcentaje corresponde a los hogares de su departamento.</p></section>` : '';
-  return `<div class="tarjeta-encabezado"><div><h2>${escapar(p.territorio)}</h2><p>${escapar(p.provincia)}</p></div>
+  return `<div class="tarjeta-encabezado"><div><h2>${escapar(p.territorio)}</h2><p>${escapar(nombreProvincia(p.provincia))}</p></div>
     <button type="button" class="tarjeta-cerrar" data-accion="cerrar" aria-label="Cerrar tarjeta">×</button></div>
     <p class="tarjeta-hogares"><strong>${miles.format(p.hogares_total)}</strong> hogares totales</p>
     <div class="barras-servicios">${barras}</div><p class="referencia-media"><i></i> Marca vertical: media nacional</p>
@@ -52,7 +52,7 @@ export function htmlProvincia(cpr, servicio, geojson, resumen) {
   const valor = servicio === 'resumen'
     ? `<p><strong>${Object.entries(SERVICIOS).filter(([k, s]) => 100 * d[s.hogares] / d.hogares_total < resumen.media_nacional[k]).length} de 4</strong> servicios bajo la media nacional en la provincia.</p>`
     : `<p><strong>${pct(d[servicio])}</strong> con ${SERVICIOS[servicio].nombre.toLowerCase()}<br>${miles.format(d[SERVICIOS[servicio].hogares])} de ${miles.format(d.hogares_total)} hogares</p>`;
-  return `<strong class="tooltip-nombre">${escapar(d.nombre)}</strong><p>${departamentos.length} departamentos con datos censales</p>${valor}
+  return `<strong class="tooltip-nombre">${escapar(nombreProvincia(d.nombre))}</strong><p>${departamentos.length} departamentos con datos censales</p>${valor}
     <p class="distribucion-titulo">Departamentos por ${servicio === 'resumen' ? 'servicios bajo la media (0–4)' : '% de hogares sin servicio'}</p>
     <div class="distribucion">${rangos.map((n, i) => `<div><i style="background:${RAMPAS[servicio][i]}"></i><span>${servicio === 'resumen' ? i : `${i * 20}–${(i + 1) * 20}%`}</span><strong>${n}</strong></div>`).join('')}</div>
     <p class="tooltip-entrar">TOCÁ PARA ENTRAR</p>`;

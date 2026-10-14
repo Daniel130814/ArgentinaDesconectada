@@ -1,5 +1,5 @@
 // Punto de entrada: carga de datos y armado del mapa.
-import { initMap, SERVICIOS, esAMBA, esPartidoGBA } from './map.js';
+import { initMap, SERVICIOS, esAMBA, esPartidoGBA, nombreProvincia } from './map.js';
 import { initTarjetas, initTooltip } from './panel.js';
 
 const NOTAS = {
@@ -40,7 +40,7 @@ async function main() {
     tarjetas.cambiarProvincia();
     tooltip.ocultar();
     recuadroAmba.hidden = cpr !== '06';
-    selProv.value = cpr && datosProv[cpr] ? datosProv[cpr].nombre : '';
+    selProv.value = cpr && datosProv[cpr] ? nombreProvincia(datosProv[cpr].nombre) : '';
   }
   const mapaPais = initMap(contenedor, geojson, { provincias, resumen, reserva: reservaAmba, contenedorLeyenda: document.querySelector('#leyenda-mapa'), onSeleccion: seleccionar, onProvincia, onProvinciaHover: tooltip.mostrar, onFuera: tarjetas.cerrarPorMapa });
   const mapaAmba = initMap(document.querySelector('#map-amba'), geojson, { filtro: esAMBA, activo: esPartidoGBA, conLeyenda: false, conZoom: false, provincias, onSeleccion: (p) => seleccionar(p), onFuera: tarjetas.cerrarPorMapa });
@@ -53,7 +53,7 @@ async function main() {
     },
   };
   // Buscador de departamento y zoom por provincia
-  const nombres = geojson.features.filter((f) => !f.properties.sin_datos).map((f) => f.properties);
+  const nombres = geojson.features.filter((f) => !f.properties.sin_datos).map((f) => ({ ...f.properties, provincia: nombreProvincia(f.properties.provincia) }));
   const etiquetaDe = (p) => `${p.territorio} (${p.provincia})`;
   const porEtiqueta = new Map(nombres.map((p) => [etiquetaDe(p), p]));
   const lista = document.querySelector('#lista-deptos');

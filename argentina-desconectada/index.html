@@ -12,15 +12,16 @@
   </head>
   <body>
     <div class="pagina">
+      <div class="introduccion">
       <header class="texto">
-        <h1>Dónde vivís define a qué redes estás conectado</h1>
+        <h1>¿A qué redes está conectado tu departamento?</h1>
         <p class="bajada">Agua, cloacas, gas e internet en los hogares de 527 departamentos. Elegí un servicio y mirá cómo cambia el país.</p>
       </header>
 
       <main class="texto">
         <p id="nota" class="nota" aria-live="polite"></p>
         <form id="ubicar" onsubmit="return false">
-          <label for="buscador">Buscá tu departamento</label>
+          <label for="buscador">Elegí tu departamento</label>
           <input id="buscador" type="search" list="lista-deptos" autocomplete="off" placeholder="Por ejemplo, Rosario (Santa Fe)">
           <datalist id="lista-deptos"></datalist>
           <p id="aviso-busqueda" class="aviso" role="status"></p>
@@ -32,6 +33,7 @@
           Fuente: INDEC, Censo Nacional de Población, Hogares y Viviendas 2022. Hogares en viviendas particulares. Muestra una brecha entre territorios, no sus causas.
         </footer>
       </main>
+      </div>
 
       <div class="mapas">
         <div id="selector" role="tablist" aria-label="Servicio a mostrar"></div>
