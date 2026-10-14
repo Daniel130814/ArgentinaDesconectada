@@ -75,6 +75,18 @@ Se conserva la geometría de los archivos procesados, sin separación artificial
 
 ## Preparación y límites de interpretación
 
+La ventana de comparación muestra el porcentaje de hogares con servicio y la cantidad de hogares
+de cada departamento. La diferencia es A menos B en puntos porcentuales, no una variación porcentual
+relativa. La marca vertical del gráfico corresponde a la media nacional del servicio.
+La frase resumen elige el servicio con mayor diferencia absoluta y mantiene el orden A, B;
+si hay empate, utiliza el primero en el orden agua, cloacas, gas e internet. Es una descripción, sin atribuir causas.
+
+Las tres comparaciones sugeridas buscan los extremos de internet, cloacas e índice de servicios
+bajo la media, entre departamentos con al menos 1.000 hogares. En los empates se elige primero
+el departamento con más hogares y luego el menor código. La selección manual permite comparar
+departamentos de cualquier tamaño con datos; por debajo de 1.000 hogares se muestra una advertencia
+sobre la sensibilidad de los porcentajes a pequeñas diferencias absolutas.
+
 `scripts/prepare.py` genera los datos procesados y simplifica las geometrías con tolerancia
 de 0,005 grados, preservando su topología individual, y coordenadas de cuatro decimales.
 La simplificación puede producir pequeñas diferencias visuales entre límites compartidos.

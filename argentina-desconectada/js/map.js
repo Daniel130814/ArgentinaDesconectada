@@ -360,6 +360,10 @@ export function initMap(container, geojson, opciones = {}) {
   }
   return {
     salir, nivel: () => provActual == null ? 'pais' : 'provincia',
+    reiniciar() {
+      if (provActual) salir();
+      else { marcar(null); resaltarProvincia(null); onProvinciaHover(null); onProvincia(null); if (listo) fit(validos); }
+    },
     setServicio(s) { if (s !== 'resumen' && !SERVICIOS[s]) return; servicio = s; actualizarValores(); },
     marcar,
     ancla(codigo) {

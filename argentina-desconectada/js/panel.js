@@ -11,7 +11,7 @@ const FUENTES = {
   internet_vivienda: ['H24A', 'Hogares con conexión a internet en la vivienda (no celular). No mide velocidad ni calidad.'],
 };
 
-export function htmlDepartamento(p, servicio, resumen, comparar = null, fuenteAbierta = false) {
+export function htmlDepartamento(p, servicio, resumen, fuenteAbierta = false) {
   const media = resumen.media_nacional;
   const prov = resumen.provincias[p.codigo.slice(0, 2)];
   const barras = Object.entries(SERVICIOS).map(([k, s]) => {
@@ -26,12 +26,6 @@ export function htmlDepartamento(p, servicio, resumen, comparar = null, fuenteAb
       <small>Nación ${pct(media[k])}${prov ? ` · Provincia ${pct(prov[k])}` : ''}</small>
     </div>`;
   }).join('');
-  const comparacion = comparar && comparar.codigo !== p.codigo ? `<section class="comparacion"><h3>Comparación con ${escapar(comparar.territorio)}</h3><p>${escapar(nombreProvincia(comparar.provincia))}</p>
-    <table><caption>Acceso al servicio; diferencia del departamento elegido respecto del anterior.</caption><thead><tr><th>Servicio</th><th>${escapar(p.territorio)}</th><th>${escapar(comparar.territorio)}</th><th>Dif.</th></tr></thead>
-    <tbody>${Object.entries(SERVICIOS).map(([k, s]) => {
-      const dif = p[s.campo] - comparar[s.campo];
-      return `<tr class="${k === servicio ? 'activa' : ''}"><th>${s.nombre}</th><td>${pct(p[s.campo])}<small>${miles.format(p[s.hogares])} hogares</small></td><td>${pct(comparar[s.campo])}<small>${miles.format(comparar[s.hogares])} hogares</small></td><td>${dif > 0 ? '+' : ''}${dif.toFixed(1).replace('.', ',')} pp</td></tr>`;
-    }).join('')}</tbody></table><p>pp: puntos porcentuales. Cada porcentaje corresponde a los hogares de su departamento.</p></section>` : '';
   return `<div class="tarjeta-encabezado"><div><h2>${escapar(p.territorio)}</h2><p>${escapar(nombreProvincia(p.provincia))}</p></div>
     <button type="button" class="tarjeta-cerrar" data-accion="cerrar" aria-label="Cerrar tarjeta">×</button></div>
     <p class="tarjeta-hogares"><strong>${miles.format(p.hogares_total)}</strong> hogares totales</p>
@@ -40,7 +34,7 @@ export function htmlDepartamento(p, servicio, resumen, comparar = null, fuenteAb
     <div class="tarjeta-acciones"><button type="button" data-accion="fuente" aria-expanded="${fuenteAbierta}">Fuente</button><button type="button" data-accion="comparar">Comparar con otro</button></div>
     <div class="tarjeta-fuente"${fuenteAbierta ? '' : ' hidden'}><strong>INDEC · Censo 2022</strong><p>Hogares en viviendas particulares. Porcentaje = hogares con servicio / hogares totales × 100.</p>
       ${Object.entries(SERVICIOS).map(([k, s]) => `<p><b>${s.nombre} · ${FUENTES[k][0]}</b>: ${FUENTES[k][1]}</p>`).join('')}
-      <p>Cartografía: INDEC/IGN.</p></div>${comparacion}`;
+      <p>Cartografía: INDEC/IGN.</p></div>`;
 }
 
 export function htmlProvincia(cpr, servicio, geojson, resumen) {
@@ -78,13 +72,12 @@ export function initTooltip(contenedor, geojson, resumen) {
   };
 }
 
-export function initTarjetas(contenedor, resumen, onCerrar) {
+export function initTarjetas(contenedor, resumen, onCerrar, onComparar = () => {}) {
   const card = document.createElement('article'); card.className = 'tarjeta-depto'; card.hidden = true;
   card.setAttribute('role', 'dialog'); card.setAttribute('aria-label', 'Datos del departamento'); card.tabIndex = -1;
-  const aviso = document.createElement('div'); aviso.className = 'aviso-comparacion'; aviso.hidden = true; aviso.setAttribute('role', 'status');
-  contenedor.append(card, aviso);
+  contenedor.append(card);
   const media = window.matchMedia('(max-width: 767px)');
-  let actual = null, servicio = 'agua_red', ancla = null, popup = null, comparar = null, esperando = false, fuenteAbierta = false;
+  let actual = null, servicio = 'agua_red', ancla = null, popup = null, fuenteAbierta = false;
   let mapaAncla = null, posicionPopup = null;
   function ajustar() {
     if (!popup || !ancla) return;
@@ -113,10 +106,9 @@ export function initTarjetas(contenedor, resumen, onCerrar) {
       mapaAncla = ancla.map; mapaAncla.on('move', ajustar); mapaAncla.on('resize', ajustar); ajustar();
     }
   }
-  function render() { if (actual) { card.innerHTML = htmlDepartamento(actual, servicio, resumen, comparar, fuenteAbierta); ajustar(); } }
-  function cerrar(cancelarComparacion = true) {
+  function render() { if (actual) { card.innerHTML = htmlDepartamento(actual, servicio, resumen, fuenteAbierta); ajustar(); } }
+  function cerrar() {
     actual = null; card.hidden = true; desmontar();
-    if (cancelarComparacion) { comparar = null; esperando = false; aviso.hidden = true; }
     onCerrar();
   }
   card.addEventListener('click', (e) => {
@@ -124,13 +116,8 @@ export function initTarjetas(contenedor, resumen, onCerrar) {
     const b = e.target.closest('button[data-accion]'); if (!b) return;
     if (b.dataset.accion === 'cerrar') cerrar();
     if (b.dataset.accion === 'fuente') { fuenteAbierta = !fuenteAbierta; render(); }
-    if (b.dataset.accion === 'comparar') {
-      comparar = actual; esperando = true; fuenteAbierta = false;
-      aviso.innerHTML = `<span>Elegí otro departamento para comparar con ${escapar(actual.territorio)}. Podés cambiar de provincia o usar el buscador.</span><button type="button">Cancelar</button>`;
-      aviso.hidden = false; cerrar(false);
-    }
+    if (b.dataset.accion === 'comparar') { const p = actual; cerrar(); onComparar(p); }
   });
-  aviso.addEventListener('click', (e) => { if (e.target.closest('button')) cerrar(); });
   document.addEventListener('click', (e) => {
     if (!actual || card.contains(e.target) || e.target.closest('.mapa-canvas, .etiqueta-prov, #buscador, #lista-deptos, #selector, .mapa-dimension')) return;
     cerrar();
@@ -139,15 +126,13 @@ export function initTarjetas(contenedor, resumen, onCerrar) {
   return {
     mostrar(p, ubicacion) {
       if (p.sin_datos || ['94021', '94028'].includes(p.codigo)) return;
-      if (!esperando) comparar = null;
-      else if (comparar?.codigo === p.codigo) return false;
-      esperando = false; aviso.hidden = true; actual = p; ancla = ubicacion; fuenteAbierta = false;
+      actual = p; ancla = ubicacion; fuenteAbierta = false;
       render(); card.hidden = false; colocar(); card.focus({ preventScroll: true });
     },
     cerrar,
     cerrarPorMapa() { if (actual) cerrar(); },
-    cambiarProvincia() { cerrar(!esperando); },
-    escape() { if (!actual && !esperando) return false; cerrar(); return true; },
+    cambiarProvincia() { cerrar(); },
+    escape() { if (!actual) return false; cerrar(); return true; },
     setServicio(s) { servicio = s; render(); },
   };
 }

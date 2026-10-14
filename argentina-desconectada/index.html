@@ -36,6 +36,11 @@
       </div>
 
       <div class="mapas">
+        <nav class="barra-vistas" aria-label="Vistas de la exploración">
+          <button type="button" id="vista-mapa" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3Z M9 3v15 M15 6v15"/></svg>Mapa</button>
+          <button type="button" id="vista-comparar" aria-haspopup="dialog" aria-controls="modal-comparar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="8" cy="7" r="3"/><circle cx="16" cy="17" r="3"/></svg>Comparar</button>
+          <button type="button" id="vista-metodologia" aria-haspopup="dialog" aria-controls="modal-metodologia"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v15H5Z M8 9h8 M8 13h8 M8 17h5"/></svg>Metodología</button>
+        </nav>
         <div id="selector" role="tablist" aria-label="Servicio a mostrar"></div>
         <section id="map" aria-label="Mapa de acceso a servicios por departamento"></section>
         <div id="leyenda-mapa" class="leyenda"></div>
@@ -44,6 +49,30 @@
           <div id="map-amba" role="region" aria-label="Mapa ampliado de los 24 partidos del conurbano bonaerense"></div>
         </figure>
       </div>
+      <dialog id="modal-comparar" class="modal-exploracion" aria-labelledby="titulo-comparar" aria-describedby="descripcion-comparar">
+        <div class="modal-cabecera"><div><p class="modal-antetitulo">Dos territorios, cuatro servicios</p><h2 id="titulo-comparar">Comparar departamentos</h2></div><button type="button" class="modal-cerrar" data-cerrar-modal aria-label="Cerrar comparación">×</button></div>
+        <p id="descripcion-comparar">Elegí dos departamentos para comparar el porcentaje de hogares con acceso a cada servicio.</p>
+        <div class="comparar-selecciones">
+          <section class="seleccion-comparar seleccion-a"><label for="comparar-a"><span class="distintivo-a">A</span> Departamento A</label><input id="comparar-a" type="search" list="lista-comparar" autocomplete="off" placeholder="Departamento (Provincia)" aria-describedby="error-comparar-a"><p id="error-comparar-a" class="error-comparar" role="status"></p><div id="detalle-comparar-a" class="detalle-comparar"></div></section>
+          <section class="seleccion-comparar seleccion-b"><label for="comparar-b"><span class="distintivo-b">B</span> Departamento B</label><input id="comparar-b" type="search" list="lista-comparar" autocomplete="off" placeholder="Departamento (Provincia)" aria-describedby="error-comparar-b"><p id="error-comparar-b" class="error-comparar" role="status"></p><div id="detalle-comparar-b" class="detalle-comparar"></div></section>
+        </div>
+        <datalist id="lista-comparar"></datalist>
+        <section class="comparar-sugerencias" aria-labelledby="titulo-sugerencias"><h3 id="titulo-sugerencias">Comparaciones sugeridas</h3><p>Mayor frente a menor acceso o índice. Solo departamentos con al menos 1.000 hogares.</p><div id="sugerencias-comparar"></div></section>
+        <p id="aviso-pocos-hogares" class="aviso-pocos-hogares" role="status" hidden>Departamento con pocos hogares: pequeñas diferencias absolutas generan grandes variaciones porcentuales.</p>
+        <p id="comparar-vacio" class="comparar-vacio" role="status">Elegí A y B o probá una comparación sugerida.</p>
+        <section id="resultado-comparar" hidden aria-label="Resultados de la comparación">
+          <div class="claves-comparar"><span><i class="punto-a"></i> A</span><span><i class="punto-b"></i> B</span><span><i class="marca-nacion"></i> Media nacional</span></div>
+          <div class="comparar-grafico"><div id="grafico-dumbbell"></div><div id="cifras-comparar"></div></div>
+          <p class="nota-diferencia">Porcentaje de hogares con servicio. Diferencia A − B, en puntos porcentuales (p.p.).</p>
+          <p id="frase-comparar" class="frase-comparar" aria-live="polite"></p>
+        </section>
+        <footer class="comparar-pie"><p>Fuente: INDEC, Censo 2022 · Hogares en viviendas particulares. El gas corresponde al combustible principal para cocinar; internet, a conexión en la vivienda. No se comparan calidad ni causas.</p><div class="acciones-comparar"><button type="button" id="copiar-comparacion" disabled>Copiar enlace</button><button type="button" data-volver-mapa>Volver al mapa</button></div><p id="estado-enlace" role="status"></p><input id="enlace-comparacion" type="text" readonly aria-label="Enlace de la comparación para copiar" hidden></footer>
+      </dialog>
+      <dialog id="modal-metodologia" class="modal-exploracion modal-metodologia" aria-labelledby="titulo-metodologia">
+        <div class="modal-cabecera"><h2 id="titulo-metodologia">Metodología y fuentes</h2><button type="button" class="modal-cerrar" data-cerrar-modal aria-label="Cerrar metodología">×</button></div>
+        <section id="contenido-metodologia" class="contenido-metodologia" aria-live="polite"></section>
+        <button type="button" data-volver-mapa>Volver al mapa</button>
+      </dialog>
     </div>
     <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
     <script type="module" src="js/main.js"></script>

@@ -1,6 +1,7 @@
 // Punto de entrada: carga de datos y armado del mapa.
 import { initMap, SERVICIOS, esAMBA, esPartidoGBA, nombreProvincia } from './map.js';
 import { initTarjetas, initTooltip } from './panel.js';
+import { initComparador, initMetodologia } from './comparar.js';
 
 const NOTAS = {
   agua_red: 'Hogares con agua por red pública.',
@@ -24,7 +25,8 @@ async function main() {
 
   const contenedor = document.querySelector('#map');
   const tooltip = initTooltip(contenedor, geojson, resumen);
-  const tarjetas = initTarjetas(contenedor, resumen, () => marcarEnMapas(null));
+  let comparador, metodologia;
+  const tarjetas = initTarjetas(contenedor, resumen, () => marcarEnMapas(null), (p) => comparador.abrir(p.codigo));
   function marcarEnMapas(codigo) {
     mapaPais.marcar(codigo);
     mapaAmba.marcar(codigo);
@@ -44,6 +46,16 @@ async function main() {
   }
   const mapaPais = initMap(contenedor, geojson, { provincias, resumen, reserva: reservaAmba, contenedorLeyenda: document.querySelector('#leyenda-mapa'), onSeleccion: seleccionar, onProvincia, onProvinciaHover: tooltip.mostrar, onFuera: tarjetas.cerrarPorMapa });
   const mapaAmba = initMap(document.querySelector('#map-amba'), geojson, { filtro: esAMBA, activo: esPartidoGBA, conLeyenda: false, conZoom: false, provincias, resumen, onSeleccion: (p) => seleccionar(p), onFuera: tarjetas.cerrarPorMapa });
+  comparador = initComparador(geojson, resumen, () => { tarjetas.cerrar(); tooltip.ocultar(); metodologia?.cerrar(); });
+  metodologia = initMetodologia(() => { tarjetas.cerrar(); tooltip.ocultar(); comparador.cerrar(); });
+  document.querySelector('#vista-comparar').addEventListener('click', () => comparador.abrir());
+  document.querySelector('#vista-metodologia').addEventListener('click', () => metodologia.abrir());
+  function volverAlMapa() {
+    comparador.cerrar(); metodologia.cerrar(); tarjetas.cerrar(); tooltip.ocultar(); mapaPais.reiniciar();
+    document.querySelector('#map').scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
+  }
+  document.querySelector('#vista-mapa').addEventListener('click', volverAlMapa);
+  document.querySelectorAll('[data-volver-mapa]').forEach((b) => b.addEventListener('click', volverAlMapa));
   const mapa = {
     setServicio(s) {
       mapaPais.setServicio(s);
@@ -80,7 +92,7 @@ async function main() {
   });
   selProv.addEventListener('change', () => mapaPais.entrarProvincia(selProv.value));
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !tarjetas.escape()) mapaPais.salir();
+    if (e.key === 'Escape' && !e.defaultPrevented && !document.querySelector('dialog[open]') && !tarjetas.escape()) mapaPais.salir();
   });
 
   const opciones = {
@@ -93,7 +105,9 @@ async function main() {
   function elegir(clave) {
     mapa.setServicio(clave);
     nota.textContent = NOTAS[clave];
-    selector.querySelectorAll('button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.clave === clave)));
+    selector.querySelectorAll('button').forEach((b) => {
+      const activa = b.dataset.clave === clave; b.setAttribute('aria-selected', String(activa)); b.tabIndex = activa ? 0 : -1;
+    });
   }
 
   for (const [clave, nombre] of Object.entries(opciones)) {
@@ -111,6 +125,13 @@ async function main() {
       b.append(m);
     }
     b.addEventListener('click', () => elegir(clave));
+    b.addEventListener('keydown', (e) => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+      e.preventDefault();
+      const botones = [...selector.querySelectorAll('button')], i = botones.indexOf(b);
+      const destino = e.key === 'Home' ? 0 : e.key === 'End' ? botones.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : -1) + botones.length) % botones.length;
+      elegir(botones[destino].dataset.clave); botones[destino].focus();
+    });
     selector.append(b);
   }
   elegir('agua_red');
