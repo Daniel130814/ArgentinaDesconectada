@@ -56,7 +56,9 @@ export function rangoColor(p, servicio) {
   return v == null ? null : servicio === 'resumen' ? v : Math.min(4, Math.floor(Math.max(0, 100 - v) / 20));
 }
 const collection = (features) => ({ type: 'FeatureCollection', features });
-const vacio = () => ({ version: 8, glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+// Tipografías del mapa alojadas en el repo (fonts/): la ruta es relativa a la página, así funciona en cualquier subcarpeta.
+const GLIFOS = `${new URL('.', document.baseURI).href}fonts/{fontstack}/{range}.pbf`;
+const vacio = () => ({ version: 8, glyphs: GLIFOS,
   sources: {}, layers: [{ id: 'fondo', type: 'background', paint: { 'background-color': '#0B0D10' } }] });
 const PRIORIDADES = ['02', '06', '14', '50', '66', '22', '58', '26', '78', '54'];
 const puntoMedio = (features) => { const b = bounds(features); return [(b[0][0] + b[1][0]) / 2, (b[0][1] + b[1][1]) / 2]; };
