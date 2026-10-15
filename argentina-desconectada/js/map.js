@@ -131,7 +131,7 @@ export function initMap(container, geojson, opciones = {}) {
   const map = new maplibregl.Map({ container: host, style: vacio(), center: [-64, -39], zoom: 3,
     pitch: conZoom ? pitch() : 0, bearing: conZoom ? -20 : 0,
     attributionControl: false, renderWorldCopies: false,
-    maxZoom: 13, minZoom: 1, dragPan: conZoom, scrollZoom: conZoom, boxZoom: conZoom,
+    maxZoom: 14, minZoom: 1, dragPan: conZoom, scrollZoom: conZoom, boxZoom: conZoom,
     doubleClickZoom: conZoom, touchZoomRotate: conZoom, keyboard: conZoom, dragRotate: conZoom });
   const leyenda = conLeyenda ? (contenedorLeyenda || container.appendChild(document.createElement('div'))) : null;
   if (leyenda) leyenda.classList.add('leyenda');
@@ -273,7 +273,7 @@ export function initMap(container, geojson, opciones = {}) {
     }
     frame = requestAnimationFrame(tick);
   }
-  function fit(fs, maxZoom = 7, animar = true, extra = {}) {
+  function fit(fs, maxZoom = 14, animar = true, extra = {}) { // sin tope que impida acercarse a provincias chicas (CABA llega a ~11,5)
     if (!fs.length) return;
     const bloque = document.querySelector('.introduccion');
     const izquierda = conZoom && !mobile() ? Math.max((bloque?.offsetWidth || 330) + 40, reserva() + 25) : 20;
@@ -359,7 +359,7 @@ export function initMap(container, geojson, opciones = {}) {
     }
     listo = true; aplicarFactor(); actualizarNivel(); actualizarValores();
     marcar(seleccionado);
-    fit(activo ? validos.filter(activo) : provActual ? validos.filter((f) => f.properties.cpr === provActual) : validos, conZoom ? 7 : 10, false);
+    fit(activo ? validos.filter(activo) : provActual ? validos.filter((f) => f.properties.cpr === provActual) : validos, conZoom ? 14 : 10, false);
   });
   map.on('error', (e) => { const status = document.querySelector('#status'); if (status) status.textContent = `No se pudo dibujar el mapa: ${e.error.message}`; console.error(e.error); });
   // Dentro de una provincia solo responden sus departamentos; las demás no son interactivas.
@@ -452,7 +452,7 @@ export function initMap(container, geojson, opciones = {}) {
       if (!conZoom) return;
       const f = validos.find((d) => d.properties.codigo === codigo); if (!f) return;
       if (provActual !== f.properties.cpr) abrir(f.properties.cpr);
-      this.marcar(codigo); if (listo) fit([f], 11, true, lugarTarjeta());
+      this.marcar(codigo); if (listo) fit([f], 13, true, lugarTarjeta());
     },
     entrarProvincia(nombre) { const f = provs.find((d) => nombreProvincia(d.properties.nombre) === nombre); if (f) abrir(f.properties.cpr); else salir(); },
   };

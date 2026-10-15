@@ -29,6 +29,16 @@ OUT.mkdir(parents=True, exist_ok=True)
 
 SERVICIOS = ["agua_red", "cloacas_red", "gas_red", "internet_vivienda"]
 TOLERANCIA_SIMPLIFICACION = 0.005  # grados; subir si el archivo pesa > 2 MB
+TOLERANCIA_FINA = 0.0005  # grados: CABA y los 24 partidos del conurbano son chicos y 0,005° los deforma
+PARTIDOS_GBA = {
+    "06028", "06035", "06091", "06260", "06270", "06274", "06371", "06408", "06410", "06412", "06427", "06434",
+    "06490", "06515", "06539", "06560", "06568", "06658", "06749", "06756", "06760", "06805", "06840", "06861",
+}
+
+
+def tolerancia(codigo):
+    """Tolerancia de simplificación según el código de provincia (2 dígitos) o de departamento (5 dígitos)."""
+    return TOLERANCIA_FINA if codigo.startswith("02") or codigo in PARTIDOS_GBA else TOLERANCIA_SIMPLIFICACION
 
 # ---------------------------------------------------------------- datos
 df = pd.read_csv(RAW / "hogares2022_departamentos_provincias.csv", dtype={"codigo": str})
@@ -86,7 +96,7 @@ merged["sin_datos"] = merged["codigo"].isna()  # se pintan en gris, nunca como 0
 merged = merged.drop(columns=["codigo"]).rename(columns={"cde": "codigo"})
 
 # Simplificar para que cargue rápido (preservando topología por polígono)
-merged["geometry"] = merged.geometry.simplify(TOLERANCIA_SIMPLIFICACION, preserve_topology=True)
+merged["geometry"] = [g.simplify(tolerancia(c), preserve_topology=True) for g, c in zip(merged.geometry, merged["codigo"])]
 
 salida = OUT / "departamentos_servicios.geojson"
 merged.to_file(salida, driver="GeoJSON", COORDINATE_PRECISION=4)
@@ -99,7 +109,7 @@ print(f"OK → {salida} ({salida.stat().st_size / 1e6:.2f} MB)")
 geo["cpr"] = geo["cde"].str[:2]
 limites = geo[~geo["cde"].isin(sin_datos)].dissolve(by="cpr", as_index=False)
 limites["nombre"] = limites["cpr"].map(prov_nombre)
-limites["geometry"] = limites.geometry.simplify(TOLERANCIA_SIMPLIFICACION, preserve_topology=True)
+limites["geometry"] = [g.simplify(tolerancia(c), preserve_topology=True) for g, c in zip(limites.geometry, limites["cpr"])]
 sal_prov = OUT / "provincias.geojson"
 limites[["cpr", "nombre", "geometry"]].to_file(sal_prov, driver="GeoJSON", COORDINATE_PRECISION=4)
 print(f"OK → {sal_prov} ({sal_prov.stat().st_size / 1e6:.2f} MB, {len(limites)} provincias)")
@@ -115,27 +125,33 @@ print(f"OK → {sal_pais} ({sal_pais.stat().st_size / 1e6:.2f} MB)")
 # Cada límite se dibuja como una franja interna del polígono (poligono - poligono.buffer(-ancho)),
 # calculada en un CRS métrico (EPSG:3857). La capa de extrusión del mapa las eleva a la altura del techo.
 CRS_METRICO = "EPSG:3857"
-ANCHO_PROVINCIA = 2000  # metros
-ANCHOS_DEPARTAMENTO = [400, 200, 100, 50]  # se prueba el siguiente si el buffer negativo vacía un polígono chico
+# Ancho proporcional al tamaño: así las provincias y departamentos chicos (CABA y sus comunas) conservan bordes finos.
+ANCHO_PROVINCIA = lambda lado: min(2000, 0.015 * lado)  # metros; 1,5% del lado menor del bbox, tope 2.000 m
+ANCHO_DEPARTAMENTO = lambda lado: max(60, min(400, 0.03 * lado))  # metros; 3% del lado menor, entre 60 y 400 m
 
 
-def franja(geom, anchos):
-    for ancho in anchos:
-        borde = geom.difference(geom.buffer(-ancho, join_style="mitre"))  # inglete: pocos vértices
+def lado_menor(geom):
+    x0, y0, x1, y1 = geom.bounds
+    return min(x1 - x0, y1 - y0)
+
+
+def franja(geom, ancho):
+    for w in (ancho, ancho / 2, ancho / 4):  # si el buffer negativo vaciara el polígono, se prueba con menos ancho
+        borde = geom.difference(geom.buffer(-w, join_style="mitre"))  # inglete: pocos vértices
         if not borde.is_empty:
             return borde
-    return geom.boundary.buffer(10).intersection(geom)  # último recurso: línea fina siguiendo el contorno
+    return geom.boundary.buffer(ancho / 8).intersection(geom)  # último recurso: línea fina siguiendo el contorno
 
 
-def franjas(gdf, anchos):
+def franjas(gdf, ancho_de):
     metrico = gdf.to_crs(CRS_METRICO)
-    metrico["geometry"] = [franja(g, anchos) for g in metrico.geometry]
+    metrico["geometry"] = [franja(g, ancho_de(lado_menor(g))) for g in metrico.geometry]
     return metrico.to_crs(epsg=4326)
 
 
 # Departamentos: mismos campos que el polígono (código y valores que definen la altura)
 CAMPOS_ALTURA = ["codigo", "servicios_bajo_media"] + [f"pct_{s_}" for s_ in SERVICIOS] + ["geometry"]
-bordes_deptos = franjas(merged.loc[~merged["sin_datos"], CAMPOS_ALTURA].copy(), ANCHOS_DEPARTAMENTO)
+bordes_deptos = franjas(merged.loc[~merged["sin_datos"], CAMPOS_ALTURA].copy(), ANCHO_DEPARTAMENTO)
 sal = OUT / "bordes_departamentos.geojson"
 bordes_deptos.to_file(sal, driver="GeoJSON", COORDINATE_PRECISION=4)
 print(f"OK → {sal} ({sal.stat().st_size / 1e6:.2f} MB, {len(bordes_deptos)} franjas)")
@@ -145,7 +161,7 @@ bordes_prov = limites[["cpr", "nombre", "geometry"]].copy()
 for _, r in prov.iterrows():
     for s_ in SERVICIOS:
         bordes_prov.loc[bordes_prov["cpr"] == r["codigo"], f"pct_{s_}"] = round(100 * r[f"hogares_{s_}"] / r["hogares_total"], 4)
-bordes_prov = franjas(bordes_prov, [ANCHO_PROVINCIA, 1000, 500])
+bordes_prov = franjas(bordes_prov, ANCHO_PROVINCIA)
 sal = OUT / "bordes_provincias.geojson"
 bordes_prov.to_file(sal, driver="GeoJSON", COORDINATE_PRECISION=4)
 print(f"OK → {sal} ({sal.stat().st_size / 1e6:.2f} MB, {len(bordes_prov)} franjas)")
