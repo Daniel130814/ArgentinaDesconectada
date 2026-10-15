@@ -108,6 +108,7 @@ Los polígonos `94021` y `94028` (Antártida Argentina e Islas del Atlántico Su
 - Los datos originales están sin modificar en `data/raw/`.
 - `scripts/prepare.py` une datos y cartografía por código, calcula medias e índice, y genera los archivos de `data/processed/`, incluidas las franjas de borde (`bordes_provincias.geojson` y `bordes_departamentos.geojson`).
 - Para reproducir: `pip install pandas geopandas` y luego `python scripts/prepare.py`.
+- Los resultados por departamento se pueden descargar desde la ventana de Metodología del sitio, o en `data/processed/argentina_desconectada_departamentos.csv`: una fila por departamento (527, sin provincias ni territorios sin datos), códigos como texto con ceros a la izquierda, porcentajes con un decimal y punto decimal, codificación UTF-8 con BOM. Incluye hogares y porcentaje con cada servicio, y el índice de servicios bajo la media.
 
 ## 12. Fuentes y licencias
 

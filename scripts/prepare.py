@@ -15,6 +15,7 @@ Salidas:
     data/processed/provincias.geojson, pais.geojson
     data/processed/bordes_provincias.geojson, bordes_departamentos.geojson
     data/processed/resumen_nacional.json
+    data/processed/argentina_desconectada_departamentos.csv  (descarga pública, UTF-8 con BOM)
 """
 import json
 from pathlib import Path
@@ -77,6 +78,25 @@ cols = (
 deptos = deptos[cols]
 for s in SERVICIOS:
     deptos[f"pct_{s}"] = deptos[f"pct_{s}"].round(1)
+
+# ---------------------------------------------------------------- CSV de descarga
+# Una fila por departamento (527): sin provincias ni territorios sin datos. Códigos como texto con ceros a la izquierda;
+# porcentajes con un decimal y punto decimal; UTF-8 con BOM para que Excel muestre bien las tildes.
+descarga = pd.DataFrame({
+    "codigo_departamento": deptos["codigo"].astype(str),
+    "departamento": deptos["territorio"],
+    "codigo_provincia": deptos["codigo"].str[:2],
+    "provincia": deptos["provincia"],
+    "hogares_total": deptos["hogares_total"].astype(int),
+})
+for s in SERVICIOS:
+    descarga[f"{s}_hogares_con_servicio"] = deptos[f"hogares_{s}"].astype(int)
+    descarga[f"{s}_pct_con_servicio"] = deptos[f"pct_{s}"]
+descarga["servicios_bajo_media"] = deptos["servicios_bajo_media"].astype(int)
+assert len(descarga) == 527 and descarga["codigo_departamento"].is_unique
+sal_csv = OUT / "argentina_desconectada_departamentos.csv"
+descarga.to_csv(sal_csv, index=False, encoding="utf-8-sig", float_format="%.1f")
+print(f"OK → {sal_csv} ({len(descarga)} filas)")
 
 # ---------------------------------------------------------------- geometría
 geo = gpd.read_file(RAW / "departamentos.geojson")

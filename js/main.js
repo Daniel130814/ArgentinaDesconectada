@@ -3,6 +3,7 @@ import { initMap, SERVICIOS, esAMBA, esPartidoGBA, nombreProvincia } from './map
 import { initTarjetas, initTooltip } from './panel.js';
 import { initComparador, initMetodologia } from './comparar.js';
 import { initHome } from './home.js';
+import { initAyudaMapa } from './ayuda.js';
 
 const NOTAS = {
   agua_red: 'Hogares con agua por red pública.',
@@ -53,6 +54,7 @@ async function main() {
   const mapaAmba = initMap(document.querySelector('#map-amba'), geojson, { filtro: esAMBA, activo: esPartidoGBA, conLeyenda: false, conZoom: false, provincias, resumen, onSeleccion: (p) => seleccionar(p), onFuera: tarjetas.cerrarPorMapa });
   comparador = initComparador(geojson, resumen, () => { tarjetas.cerrar(); tooltip.ocultar(); metodologia?.cerrar(); });
   metodologia = initMetodologia(() => { tarjetas.cerrar(); tooltip.ocultar(); comparador.cerrar(); });
+  initAyudaMapa(contenedor); // aviso de la primera visita al mapa
   document.querySelector('#vista-comparar').addEventListener('click', () => comparador.abrir());
   document.querySelector('#vista-metodologia').addEventListener('click', () => metodologia.abrir());
   function volverAlMapa() {

@@ -27,7 +27,7 @@ button { cursor: pointer; }
 button:focus-visible, input:focus-visible, select:focus-visible, .tarjeta-depto:focus-visible { outline: 3px solid var(--amarillo); outline-offset: 2px; }
 
 /* Cartel vial verde: borde blanco de 2 px y filete interior, sin sombras difusas */
-.introduccion, .leyenda, .tarjeta-depto, .tooltip-prov, .amba, .aviso-comparacion, .modal-exploracion, .cartel-home {
+.introduccion, .leyenda, .tarjeta-depto, .tooltip-prov, .amba, .aviso-comparacion, .modal-exploracion, .cartel-home, .ayuda-mapa {
   background: var(--vial); color: var(--hueso);
   border: 2px solid var(--hueso); border-radius: 4px;
   box-shadow: inset 0 0 0 3px var(--vial), inset 0 0 0 4.5px var(--hueso);
@@ -371,3 +371,21 @@ html { scroll-snap-type: y mandatory; scroll-behavior: smooth; }
 .contexto-texto, .contexto-cierre { margin: 0; max-width: 28em; line-height: 1.5; }
 .contexto-texto { font-size: clamp(1.15rem, 2.3vw, 1.45rem); color: var(--hueso-suave); }
 .contexto-cierre { font: 600 clamp(1.45rem, 3.4vw, 2.1rem)/1.25 var(--texto); color: var(--hueso); }
+
+/* Descarga de datos (ventana de Metodología) */
+.datos-descarga { margin-top: 1.6rem; padding-top: 1rem; background: linear-gradient(90deg, var(--amarillo) 0 64%, transparent 64%) left top / 28px 3px repeat-x; }
+.datos-descarga h3 { margin: 0 0 .7rem; font-size: 1.4rem; }
+.datos-descarga p { margin: 0 0 .7rem; }
+.boton-descarga { display: inline-block; padding: .55rem .9rem; border: 2px solid var(--hueso); border-radius: 2px; color: var(--hueso); text-decoration: none; font: 600 1rem/1.1 var(--rotulo); text-transform: uppercase; letter-spacing: .07em; }
+.boton-descarga:hover { background: var(--hueso); color: var(--vial); }
+.boton-descarga:focus-visible { outline: 3px solid var(--amarillo); outline-offset: 2px; }
+.contenido-metodologia { overflow-wrap: anywhere; }
+.datos-columnas { font-size: .9rem; line-height: 1.45; color: var(--hueso-suave); overflow-wrap: anywhere; }
+
+/* Ayuda de lectura de la primera visita al mapa: aviso chico, sin oscurecer ni bloquear */
+.ayuda-mapa { position: absolute; left: 50%; bottom: 24px; z-index: 5; width: min(560px, calc(100% - 24px)); padding: .9rem 1.1rem; display: flex; flex-wrap: wrap; align-items: center; gap: .7rem 1rem; transform: translateX(-50%); opacity: 0; font-size: .95rem; line-height: 1.4; }
+.ayuda-mapa.visible { opacity: 1; }
+.ayuda-mapa p { flex: 1 1 22rem; margin: 0; }
+.ayuda-mapa button { margin-left: auto; padding: .45rem .9rem; border: 2px solid var(--hueso); border-radius: 2px; background: transparent; color: var(--hueso); font: 600 .95rem/1.1 var(--rotulo); text-transform: uppercase; letter-spacing: .07em; }
+.ayuda-mapa button:hover { background: var(--hueso); color: var(--vial); }
+@media (prefers-reduced-motion: no-preference) { .ayuda-mapa { transition: opacity .35s ease; } }

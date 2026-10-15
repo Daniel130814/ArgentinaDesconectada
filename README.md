@@ -58,6 +58,10 @@ La **altura** y el **color** representan el porcentaje de hogares **sin** el ser
 | ----------- | ------- | ---------- | -------- |
 | 85,0%       | 61,3%   | 52,7%      | 76,5%    |
 
+## Descargar los datos
+
+[`data/processed/argentina_desconectada_departamentos.csv`](data/processed/argentina_desconectada_departamentos.csv): una fila por departamento (527), con hogares y porcentaje con cada servicio y el índice de servicios bajo la media. UTF-8 con BOM (se abre bien en Excel). También se descarga desde la ventana de Metodología del sitio. Fuente: INDEC, Censo 2022. Licencia CC BY-SA 4.0.
+
 ## Metodología (resumen)
 
 - Todas las tasas se calculan como **hogares con el servicio / total de hogares** del territorio. Los agregados provinciales y nacionales **suman hogares**, nunca promedian porcentajes.

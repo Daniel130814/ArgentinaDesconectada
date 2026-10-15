@@ -142,6 +142,11 @@
       <dialog id="modal-metodologia" class="modal-exploracion modal-metodologia" aria-labelledby="titulo-metodologia">
         <div class="modal-cabecera"><h2 id="titulo-metodologia">Metodología y fuentes</h2><button type="button" class="modal-cerrar" data-cerrar-modal aria-label="Cerrar metodología">×</button></div>
         <section id="contenido-metodologia" class="contenido-metodologia" aria-live="polite"></section>
+        <section class="datos-descarga" aria-labelledby="titulo-datos-descarga">
+          <h3 id="titulo-datos-descarga">Datos</h3>
+          <p><a class="boton-descarga" href="data/processed/argentina_desconectada_departamentos.csv" download>Descargar datos por departamento (CSV)</a></p>
+          <p class="datos-columnas">Columnas: codigo_departamento, departamento, codigo_provincia, provincia, hogares_total; para cada servicio (agua_red, cloacas_red, gas_red, internet_vivienda): agua_red_hogares_con_servicio y agua_red_pct_con_servicio (y lo mismo con los otros tres); servicios_bajo_media. Fuente: INDEC, Censo 2022. Licencia CC BY-SA 4.0.</p>
+        </section>
         <button type="button" data-volver-mapa>Volver al mapa</button>
       </dialog>
     </div>
