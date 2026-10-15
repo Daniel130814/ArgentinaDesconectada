@@ -124,14 +124,15 @@ export function initMap(container, geojson, opciones = {}) {
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const mobile = () => window.matchMedia('(max-width: 767px)').matches;
   const duration = reduced ? 0 : 650;
-  let servicio = 'agua_red', provActual = null, seleccionado = null, listo = false, modo3D = conZoom, provinciaHover = null;
+  let servicio = 'agua_red', provActual = null, seleccionado = null, listo = false, provinciaHover = null;
+  let modo3D = false; // la vista plana es la predeterminada; el botón agrega altura y perspectiva
   let frame = 0, visuales = new Map();
-  let dimensionFrame = 0, factorAltura = conZoom ? 1 : 0;
+  let dimensionFrame = 0, factorAltura = 0; // 0 = plano (sin altura); 1 = altura completa
   const host = document.createElement('div');
   host.className = 'mapa-canvas'; container.append(host);
   const pitch = () => modo3D ? (mobile() ? PITCH_MOVIL : PITCH_ESCRITORIO) : 0;
   const map = new maplibregl.Map({ container: host, style: vacio(), center: [-64, -39], zoom: 3,
-    pitch: conZoom ? pitch() : 0, bearing: conZoom ? -20 : 0,
+    pitch: pitch(), bearing: modo3D ? -20 : 0, maxPitch: modo3D ? 60 : 0,
     attributionControl: false, renderWorldCopies: false,
     maxZoom: 14, minZoom: 1, dragPan: conZoom, scrollZoom: conZoom, boxZoom: conZoom,
     doubleClickZoom: conZoom, touchZoomRotate: conZoom, keyboard: conZoom, dragRotate: conZoom });
@@ -145,8 +146,8 @@ export function initMap(container, geojson, opciones = {}) {
     map.addControl(new maplibregl.FullscreenControl({ container: document.querySelector('.pagina') }), 'top-right');
     map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: 'Fuente: INDEC, Censo 2022 · Cartografía: INDEC/IGN' }), 'bottom-right');
     const boton = document.createElement('button');
-    boton.type = 'button'; boton.className = 'mapa-dimension'; boton.textContent = 'Vista plana';
-    boton.setAttribute('aria-label', 'Cambiar a vista plana'); boton.setAttribute('aria-pressed', 'false');
+    boton.type = 'button'; boton.className = 'mapa-dimension'; boton.textContent = 'Vista 3D';
+    boton.setAttribute('aria-label', 'Cambiar a vista 3D'); boton.setAttribute('aria-pressed', 'true');
     container.append(boton);
     boton.addEventListener('click', () => {
       modo3D = !modo3D; boton.textContent = modo3D ? 'Vista plana' : 'Vista 3D';
