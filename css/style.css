@@ -365,3 +365,9 @@ html { scroll-snap-type: y mandatory; scroll-behavior: smooth; }
   .moneda.lado-a-lado .moneda-giro { gap: .6rem; }
   .lado-a-lado .cara { width: min(calc(var(--d) * .8), calc((100vw - 3.2rem) / 2)); height: auto; aspect-ratio: 1; }
 }
+
+/* Pantalla de contexto: columna de lectura (~60 caracteres por línea); el cierre pesa más */
+.cartel-contexto { width: min(760px, 100%); display: grid; gap: clamp(1rem, 3vh, 1.6rem); }
+.contexto-texto, .contexto-cierre { margin: 0; max-width: 28em; line-height: 1.5; }
+.contexto-texto { font-size: clamp(1.15rem, 2.3vw, 1.45rem); color: var(--hueso-suave); }
+.contexto-cierre { font: 600 clamp(1.45rem, 3.4vw, 2.1rem)/1.25 var(--texto); color: var(--hueso); }
