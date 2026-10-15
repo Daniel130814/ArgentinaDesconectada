@@ -6,7 +6,7 @@ La otra cara de la moneda.
 
 Mapa interactivo sobre el acceso de los hogares argentinos a cuatro servicios básicos —**agua de red, cloacas, gas de red e internet**— en los 527 departamentos, partidos y comunas del país, con datos del Censo Nacional 2022.
 
-🔗 **Ver el proyecto:** [ENLACE A GITHUB PAGES]
+🔗 **Ver el proyecto:** https://daniel130814.github.io/ArgentinaDesconectada/
 
 Proyecto presentado en **Contar con Datos 2026** (Universidad de San Andrés), categoría _Exploración Interactiva_.
 
@@ -103,4 +103,4 @@ Datos: INDEC, Censo 2022, bajo licencia [CC BY-SA 4.0](https://creativecommons.o
 
 ## Autor
 
-[TU NOMBRE] · [LinkedIn / contacto]
+Daniel Vidal · https://www.linkedin.com/in/daniel-vidal-it/
