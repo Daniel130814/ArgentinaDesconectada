@@ -4,7 +4,16 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#0B0D10">
-    <title>Argentina desconectada</title>
+    <title>La Argentina desconectada: la otra cara de la moneda</title>
+    <meta name="description" content="Una misma Argentina, dos países: el que tiene las redes en la puerta y el que todavía las espera. Por Daniel Vidal.">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="es_AR">
+    <meta property="og:site_name" content="La Argentina desconectada">
+    <meta property="og:title" content="La Argentina desconectada: la otra cara de la moneda">
+    <meta property="og:description" content="Una misma Argentina, dos países: el que tiene las redes en la puerta y el que todavía las espera. Por Daniel Vidal.">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="La Argentina desconectada: la otra cara de la moneda">
+    <meta name="twitter:description" content="Una misma Argentina, dos países: el que tiene las redes en la puerta y el que todavía las espera. Por Daniel Vidal.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
@@ -14,19 +23,22 @@
   </head>
   <body>
     <div class="home" id="home">
-      <section class="pantalla" aria-labelledby="home-titulo">
-        <div class="cartel-home">
-          <h1 id="home-titulo">Dónde vivís define a qué redes estás conectado</h1>
-          <div class="eje" aria-hidden="true"></div>
-          <ul class="contadores" aria-label="Alcance de los datos">
-            <li><strong data-contador="hogares" data-decimales="1">0</strong> <span>millones de hogares</span></li>
-            <li><strong data-contador="departamentos">0</strong> <span>departamentos</span></li>
-            <li><strong data-contador="servicios">0</strong> <span>servicios</span></li>
-          </ul>
+      <section class="pantalla pantalla-portada" aria-labelledby="home-titulo">
+        <div class="portada">
+          <header class="portada-cab">
+            <h1 id="home-titulo">La Argentina desconectada</h1>
+            <p class="portada-subtitulo">La otra cara de la moneda</p>
+          </header>
+          <div class="moneda" id="moneda" role="button" tabindex="0" aria-pressed="false" aria-label="Moneda de dos caras. Cara A: en la Comuna 14, CABA, 95 de cada 100 hogares tienen internet. Cara B: en Sarmiento, Santiago del Estero, 9 de cada 100. Activala para darla vuelta.">
+            <div class="moneda-giro" id="moneda-giro"></div>
+          </div>
+          <p class="portada-frase">Una misma Argentina, dos países: el que tiene las redes en la puerta y el que todavía las espera.</p>
+          <p class="portada-autor">Por Daniel Vidal</p>
+          <button type="button" class="boton-mapa portada-boton" data-ir-datos>Ver los datos</button>
         </div>
-        <p class="pie-pantalla">Fuente: INDEC, Censo 2022. Extremos entre departamentos con al menos 1.000 hogares</p>
+        <p class="pie-pantalla">Datos: INDEC, Censo 2022</p>
       </section>
-      <section class="pantalla" aria-label="Internet en la vivienda">
+      <section class="pantalla" id="datos" aria-label="Internet en la vivienda">
         <div class="cartel-home">
           <p class="frase" id="home-internet"></p>
           <div class="eje" aria-hidden="true"></div>
@@ -64,7 +76,7 @@
     <div class="pagina" id="mapa">
       <div class="introduccion">
       <header class="texto">
-        <h2 class="titulo-intro">Dónde vivís define a qué redes estás conectado</h2>
+        <h2 class="titulo-intro">La Argentina desconectada</h2>
         <p class="bajada">Agua, cloacas, gas e internet en los hogares de 527 departamentos. Elegí un servicio y mirá cómo cambia el país.</p>
       </header>
 

@@ -287,14 +287,8 @@ html { scroll-snap-type: y mandatory; scroll-behavior: smooth; }
 .pantalla, .pagina { scroll-snap-align: start; }
 .pantalla { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.2rem; min-height: 100vh; min-height: 100dvh; padding: 4.2rem 24px 2.8rem; background: var(--asfalto); }
 .cartel-home { width: min(1040px, 100%); padding: clamp(1.2rem, min(4vw, 5vh), 3.2rem); }
-.cartel-home h1 { margin: 0; padding: 0; font: 700 clamp(2.5rem, 7.2vw, 6.2rem)/.94 var(--rotulo); text-transform: uppercase; letter-spacing: .03em; text-wrap: balance; background: none; overflow-wrap: break-word; }
 .frase { margin: 0; font: 600 clamp(1.6rem, min(3.9vw, 5.4vh), 3.1rem)/1.1 var(--rotulo); text-transform: uppercase; letter-spacing: .025em; text-wrap: pretty; overflow-wrap: break-word; }
 .eje { height: 3px; margin: clamp(1rem, min(3vw, 3.5vh), 2rem) 0; background: linear-gradient(90deg, var(--amarillo) 0 64%, transparent 64%) left / 28px 3px repeat-x; }
-.contadores { display: flex; flex-wrap: wrap; gap: 1.2rem 0; margin: 0; padding: 0; list-style: none; }
-.contadores li { flex: 1 1 0; min-width: 9rem; padding: 0 1.2rem; background: linear-gradient(var(--amarillo) 0 64%, transparent 64%) left / 3px 22px repeat-y; }
-.contadores li:first-child { padding-left: 0; background: none; }
-.contadores strong { display: block; font: 700 clamp(3.2rem, 8vw, 6rem)/1 var(--rotulo); letter-spacing: .02em; }
-.contadores span { display: block; font: 600 clamp(1rem, 1.8vw, 1.35rem)/1.2 var(--rotulo); text-transform: uppercase; letter-spacing: .08em; color: var(--hueso-suave); }
 .hb-barras { display: grid; gap: 1.1rem 2.4rem; }
 .hb-grupo { display: grid; gap: .85rem; align-content: start; }
 .hb-grupo + .hb-grupo { padding-top: 1.1rem; background: linear-gradient(90deg, var(--amarillo) 0 64%, transparent 64%) left top / 28px 3px repeat-x; }
@@ -333,7 +327,41 @@ html { scroll-snap-type: y mandatory; scroll-behavior: smooth; }
   .hb-etiqueta { font-size: 1.05rem; }
   .hb-pista { height: 14px; margin-top: .2rem; }
   .nota-home { margin-top: .8rem; }
-  .contadores li { flex-basis: 100%; padding: .8rem 0 0; background: linear-gradient(90deg, var(--amarillo) 0 64%, transparent 64%) left top / 28px 3px repeat-x; }
-  .contadores li:first-child { padding-top: 0; background: none; }
-  .saltar-mapa { top: 10px; right: 10px; font-size: .95rem; }
+      .saltar-mapa { top: 10px; right: 10px; font-size: .95rem; }
+}
+
+/* Portada: la moneda es el único protagonista */
+.pantalla-portada { padding-top: 4.5rem; }
+.portada { --d: 280px; width: min(1200px, 100%); display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, .75fr);
+  grid-template-areas: "cab moneda" "frase moneda" "autor moneda" "boton moneda"; grid-template-rows: auto auto auto auto;
+  align-content: center; column-gap: clamp(2rem, 5vw, 5rem); row-gap: 1.3rem; }
+.portada-cab { grid-area: cab; }
+.portada h1 { margin: 0; font: 700 clamp(3.6rem, 9.4vw, 8.4rem)/.88 var(--rotulo); letter-spacing: -.005em; text-transform: none; padding: 0; background: none; text-wrap: balance; }
+.portada-subtitulo { margin: .9rem 0 0; font: 500 clamp(1.5rem, 3vw, 2.3rem)/1.1 var(--rotulo); letter-spacing: .02em; color: var(--hueso-suave); }
+.portada-frase { grid-area: frase; margin: .6rem 0 0; max-width: 28em; font-size: 1.25rem; line-height: 1.5; }
+.portada-autor { grid-area: autor; margin: 0; font-weight: 500; color: var(--apagado); }
+.portada-boton { grid-area: boton; justify-self: start; margin-top: .6rem; }
+.moneda { grid-area: moneda; align-self: center; justify-self: center; width: var(--d); height: var(--d); perspective: 1200px; cursor: pointer; border-radius: 50%; -webkit-tap-highlight-color: transparent; }
+.moneda:focus-visible { outline: 3px solid var(--amarillo); outline-offset: 8px; }
+.moneda-giro { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform 1.2s ease-out; }
+.moneda.girada .moneda-giro { transform: rotateY(180deg); }
+.cara { position: absolute; inset: 0; width: 100%; height: 100%; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.cara-b { transform: rotateY(180deg); }
+.cara text { font-family: var(--texto); text-anchor: middle; }
+.cara .cifra { font: 700 40px var(--rotulo); letter-spacing: .01em; }
+.cara .detalle { font: 500 20px var(--texto); }
+.cara .lugar { font: 500 15px var(--texto); }
+/* Sin movimiento: las dos caras, una al lado de la otra */
+.moneda.lado-a-lado { width: auto; height: auto; perspective: none; cursor: default; border-radius: 0; }
+.lado-a-lado .moneda-giro { display: flex; gap: 1rem; width: auto; height: auto; transform: none !important; transition: none; }
+.lado-a-lado .cara { position: static; width: calc(var(--d) * .86); height: calc(var(--d) * .86); backface-visibility: visible; -webkit-backface-visibility: visible; }
+.lado-a-lado .cara-b { transform: none; }
+@media (prefers-reduced-motion: reduce) { .moneda-giro { transition: none; } }
+@media (max-width: 860px) {
+  .portada { --d: 200px; display: flex; flex-direction: column; align-items: flex-start; row-gap: 1.2rem; }
+  .moneda { align-self: center; margin: .6rem 0; }
+  .portada h1 { font-size: clamp(3.4rem, 17vw, 5.6rem); }
+  .portada-frase { font-size: 1.15rem; }
+  .moneda.lado-a-lado .moneda-giro { gap: .6rem; }
+  .lado-a-lado .cara { width: min(calc(var(--d) * .8), calc((100vw - 3.2rem) / 2)); height: auto; aspect-ratio: 1; }
 }

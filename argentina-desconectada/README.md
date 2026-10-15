@@ -1,4 +1,6 @@
-# Argentina desconectada
+# La Argentina desconectada
+
+La otra cara de la moneda.
 
 Estructura inicial para un mapa de conectividad y comparación territorial.
 La carga de datos, el mapa, la comparación y el cálculo del índice están
