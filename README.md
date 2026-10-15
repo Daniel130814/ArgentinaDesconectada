@@ -34,9 +34,9 @@ _Los extremos citados consideran solo departamentos con al menos 1.000 hogares._
 2. **Tocá una provincia** para acercarte y ver sus departamentos.
 3. **Tocá un departamento** para ver sus cuatro servicios comparados con la media nacional.
 4. **Usá "Comparar"** para poner dos departamentos lado a lado.
-5. El mapa abre en **vista plana** (2D), para leer los valores sin la distorsión de la perspectiva. **"Vista 3D"** agrega altura y perspectiva.
+5. El mapa abre en **vista plana** (2D), para leer los valores sin la distorsión de la perspectiva. **"Vista 3D"** es opcional: agrega altura y perspectiva.
 
-La **altura** y el **color** representan el porcentaje de hogares **sin** el servicio: cuanto más alto y brillante, más desconectado.
+En vista plana, el **color** muestra el porcentaje de hogares **sin** el servicio: cuanto más claro, más desconectado. Con **"Vista 3D"**, la **altura** muestra el mismo dato.
 
 ## Datos
 

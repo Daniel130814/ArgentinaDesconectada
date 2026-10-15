@@ -1,8 +1,8 @@
 // Ayuda de lectura: un aviso chico la primera vez que el usuario llega al mapa. No oscurece ni bloquea nada.
 const CLAVE = 'ayudaMapaVista';
 const DURACION = 12000; // ms hasta que se cierra solo
-const TEXTO = 'La altura y el brillo muestran el porcentaje de hogares sin el servicio: cuanto más alto y claro, más desconectado. '
-  + 'Elegí un servicio arriba y tocá una provincia para entrar.';
+const TEXTO = 'El color muestra el porcentaje de hogares sin el servicio: cuanto más claro, más desconectado. '
+  + 'Elegí un servicio arriba y tocá una provincia para entrar. Con «Vista 3D», la altura muestra el mismo dato.';
 
 // Si localStorage no está disponible (modo privado, bloqueado), el aviso se muestra igual y simplemente no se recuerda.
 const yaVista = () => { try { return localStorage.getItem(CLAVE) === '1'; } catch { return false; } };

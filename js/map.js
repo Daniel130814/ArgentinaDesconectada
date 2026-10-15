@@ -106,7 +106,7 @@ function rayado(map) {
 export function initMap(container, geojson, opciones = {}) {
   const {
     filtro = null, activo = null, conLeyenda = true, conZoom = true,
-    reserva = () => 0, contenedorLeyenda = null, provincias = null, resumen = null, bordes = null,
+    reserva = () => 0, contenedorLeyenda = null, provincias = null, resumen = null, bordes = null, etiquetas = null,
     onHover = () => {}, onSeleccion = () => {}, onProvinciaHover = () => {}, onProvincia = () => {}, onFuera = () => {},
   } = opciones;
   if (!container) throw new Error('No se encontró el contenedor del mapa.');
@@ -153,13 +153,16 @@ export function initMap(container, geojson, opciones = {}) {
       modo3D = !modo3D; boton.textContent = modo3D ? 'Vista plana' : 'Vista 3D';
       boton.setAttribute('aria-label', `Cambiar a ${modo3D ? 'vista plana' : 'vista 3D'}`);
       boton.setAttribute('aria-pressed', String(!modo3D));
+      dibujarLeyenda(); // en plano la leyenda no menciona la altura
       animarDimension();
     });
   }
   function dibujarLeyenda() {
     if (!leyenda) return;
     const enProvincia = provActual != null || activo != null;
-    const titulo = servicio === 'resumen'
+    const titulo = !modo3D
+      ? (servicio === 'resumen' ? 'Color: servicios bajo la media nacional' : `Color: % de hogares sin ${SERVICIOS[servicio].nombre.toLowerCase()}`)
+      : servicio === 'resumen'
       ? enProvincia ? 'Altura y color: servicios bajo la media nacional en cada departamento'
         : 'Altura: media provincial ponderada por hogares · Color: servicios bajo la media en cada departamento'
       : enProvincia ? `Altura y color: % de hogares sin ${SERVICIOS[servicio].nombre.toLowerCase()} en cada departamento`
@@ -349,9 +352,12 @@ export function initMap(container, geojson, opciones = {}) {
     map.addLayer({ id: 'linea-provincia', type: 'line', source: 'provs', paint: { 'line-color': HUESO, 'line-width': 1.2, 'line-opacity': 0 } });
     map.addLayer({ id: 'sin-censo', type: 'fill', source: 'sin-datos', paint: { 'fill-pattern': 'sin-censo' } });
     if (conZoom) {
+      // Polo de inaccesibilidad del polígono más grande de cada provincia (data/processed/etiquetas_provincias.geojson);
+      // si el archivo no está, se usa el centro del bbox.
+      const polos = new Map((etiquetas?.features || []).map((e) => [e.properties.cpr, e.geometry.coordinates]));
       const puntos = provs.map((f) => {
         const cpr = f.properties.cpr, prioridad = PRIORIDADES.indexOf(cpr);
-        return { type: 'Feature', geometry: { type: 'Point', coordinates: puntoMedio(validos.filter((d) => d.properties.cpr === cpr)) },
+        return { type: 'Feature', geometry: { type: 'Point', coordinates: polos.get(cpr) || puntoMedio(validos.filter((d) => d.properties.cpr === cpr)) },
           properties: { cpr, nombre: cpr === '94' ? 'Tierra del Fuego' : nombreProvincia(f.properties.nombre), principal: prioridad >= 0, prioridad: prioridad >= 0 ? prioridad : 20 + Number(cpr) } };
       });
       map.addSource('etiquetas', { type: 'geojson', data: collection(puntos) });

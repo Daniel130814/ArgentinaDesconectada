@@ -24,6 +24,7 @@ async function main() {
   const provincias = await fetch('data/processed/provincias.geojson').then((r) => (r.ok ? r.json() : null));
   const [bordesProv, bordesDeptos] = await Promise.all(['bordes_provincias', 'bordes_departamentos'].map((n) => fetch(`data/processed/${n}.geojson`).then((r) => (r.ok ? r.json() : null))));
   const bordes = bordesProv && bordesDeptos ? { provincias: bordesProv, departamentos: bordesDeptos } : null;
+  const etiquetas = await fetch('data/processed/etiquetas_provincias.geojson').then((r) => (r.ok ? r.json() : null)).catch(() => null);
   if (!resumen || !provincias) throw new Error('No se pudo cargar el resumen o la cartografía provincial.');
   const datosProv = resumen ? resumen.provincias : {};
   initHome(geojson, resumen);
@@ -50,7 +51,7 @@ async function main() {
     recuadroAmba.hidden = cpr !== '06';
     selProv.value = cpr && datosProv[cpr] ? nombreProvincia(datosProv[cpr].nombre) : '';
   }
-  const mapaPais = initMap(contenedor, geojson, { provincias, resumen, bordes, reserva: reservaAmba, contenedorLeyenda: document.querySelector('#leyenda-mapa'), onSeleccion: seleccionar, onProvincia, onProvinciaHover: tooltip.mostrar, onFuera: tarjetas.cerrarPorMapa });
+  const mapaPais = initMap(contenedor, geojson, { provincias, resumen, bordes, etiquetas, reserva: reservaAmba, contenedorLeyenda: document.querySelector('#leyenda-mapa'), onSeleccion: seleccionar, onProvincia, onProvinciaHover: tooltip.mostrar, onFuera: tarjetas.cerrarPorMapa });
   const mapaAmba = initMap(document.querySelector('#map-amba'), geojson, { filtro: esAMBA, activo: esPartidoGBA, conLeyenda: false, conZoom: false, provincias, resumen, onSeleccion: (p) => seleccionar(p), onFuera: tarjetas.cerrarPorMapa });
   comparador = initComparador(geojson, resumen, () => { tarjetas.cerrar(); tooltip.ocultar(); metodologia?.cerrar(); });
   metodologia = initMetodologia(() => { tarjetas.cerrar(); tooltip.ocultar(); comparador.cerrar(); });

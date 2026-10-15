@@ -14,6 +14,7 @@ Salidas:
     data/processed/departamentos_servicios.geojson
     data/processed/provincias.geojson, pais.geojson
     data/processed/bordes_provincias.geojson, bordes_departamentos.geojson
+    data/processed/etiquetas_provincias.geojson  (un punto por provincia: polo de inaccesibilidad)
     data/processed/resumen_nacional.json
     data/processed/argentina_desconectada_departamentos.csv  (descarga pública, UTF-8 con BOM)
 """
@@ -185,6 +186,28 @@ bordes_prov = franjas(bordes_prov, ANCHO_PROVINCIA)
 sal = OUT / "bordes_provincias.geojson"
 bordes_prov.to_file(sal, driver="GeoJSON", COORDINATE_PRECISION=4)
 print(f"OK → {sal} ({sal.stat().st_size / 1e6:.2f} MB, {len(bordes_prov)} franjas)")
+
+# ---------------------------------------------------------------- posición de las etiquetas de provincia
+# Polo de inaccesibilidad (el punto más alejado de todos los bordes) del polígono más grande de cada provincia.
+# El centroide o el centro del bbox pueden caer fuera de provincias de forma irregular (Jujuy, Salta, Buenos Aires).
+from shapely.ops import polylabel  # noqa: E402
+
+TOLERANCIA_POLO = 100  # metros
+
+
+def punto_etiqueta(geom):
+    g = gpd.GeoSeries([geom], crs=4326).to_crs(CRS_METRICO).iloc[0]
+    partes = list(g.geoms) if g.geom_type == "MultiPolygon" else [g]
+    mayor = max(partes, key=lambda x: x.area)
+    return gpd.GeoSeries([polylabel(mayor, tolerance=TOLERANCIA_POLO)], crs=CRS_METRICO).to_crs(4326).iloc[0]
+
+
+etiquetas = limites[["cpr", "nombre"]].copy()
+etiquetas["geometry"] = [punto_etiqueta(g) for g in limites.geometry]
+etiquetas = gpd.GeoDataFrame(etiquetas, geometry="geometry", crs=4326)
+sal_et = OUT / "etiquetas_provincias.geojson"
+etiquetas.to_file(sal_et, driver="GeoJSON", COORDINATE_PRECISION=5)
+print(f"OK → {sal_et} ({len(etiquetas)} puntos)")
 
 # ---------------------------------------------------------------- resumen para la página
 resumen = {
